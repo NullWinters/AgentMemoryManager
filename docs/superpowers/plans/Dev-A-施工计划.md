@@ -86,6 +86,28 @@ docker compose exec db psql -U memory -d memorydb -c "\dt"
 # 预期: 列出 9 张表
 ```
 
+**完成状态:** ✅ 已完成 (2026-06-29)
+
+**实际产出:**
+- `src/__init__.py` + `src/models/__init__.py` — Python 包标记
+- `src/config.py` — 6 个环境变量，含 `python-dotenv` 加载
+- `src/database.py` — `DeclarativeBase` + async engine (pool_size=20) + `get_db` 依赖注入
+- `src/models/database.py` — 9 张表 ORM 模型:
+  - 使用 `pgvector.sqlalchemy.Vector(1536)` 类型（MemoryFragment / Message）
+  - 仅定义 `ForeignKey`，不定义 `relationship()`（避免 async lazy loading）
+  - UUID 主键使用 `gen_random_uuid()`
+  - `AuditLog` 使用 `BigInteger` + `Identity()`
+- `docker/init.sql` — 完整 DDL + 8 个自定义索引（含 IVFFlat、GIN）
+
+**验证结果:**
+- `uv run python -c "from src.models.database import ..."` — 9 个模型导入成功
+- `docker compose exec db psql ... -c "\dt"` — 9 张表完整创建
+- `docker compose exec db psql ... -c "\di"` — 17 个索引（9 PK + 8 自定义）
+- `vector` + `pgcrypto` 扩展已启用
+- ORM ↔ DB 往返测试: Agent/Skill/User/Session/Message/MemoryFragment 全部 CRUD 通过
+- pgvector embedding 列: `list[float]` → DB → `list[float]` 往返正确
+- `docker-compose.yml` 端口改为 `5433:5432`（系统 PG 占用 5432）
+
 ---
 
 # Task 3: 高阶 SQL 对象

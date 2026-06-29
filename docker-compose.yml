@@ -5,7 +5,7 @@ services:
       POSTGRES_DB: memorydb
       POSTGRES_USER: memory
       POSTGRES_PASSWORD: memorypass
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
     volumes:
       - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
       - pgdata:/var/lib/postgresql/data
