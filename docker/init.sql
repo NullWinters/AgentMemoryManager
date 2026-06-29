@@ -150,7 +150,7 @@ CREATE OR REPLACE FUNCTION sp_compose_context(
     p_user_id VARCHAR(64),
     p_session_id VARCHAR(64),
     p_top_k INT DEFAULT 5,
-    p_query_embedding VECTOR(1536) DEFAULT NULL
+    p_query_embedding VECTOR DEFAULT NULL
 ) RETURNS JSONB AS $$
 DECLARE
     v_agent_config JSONB;
