@@ -149,7 +149,8 @@ CREATE OR REPLACE FUNCTION sp_compose_context(
     p_agent_id VARCHAR(64),
     p_user_id VARCHAR(64),
     p_session_id VARCHAR(64),
-    p_top_k INT DEFAULT 5
+    p_top_k INT DEFAULT 5,
+    p_query_embedding VECTOR(1536) DEFAULT NULL
 ) RETURNS JSONB AS $$
 DECLARE
     v_agent_config JSONB;
@@ -159,6 +160,7 @@ DECLARE
     v_fragments JSONB;
     v_messages JSONB;
     v_summary TEXT;
+    v_message_count INT;
     v_result JSONB;
 BEGIN
     -- Step A: Agent 记忆
@@ -174,21 +176,37 @@ BEGIN
     WHERE sa.agent_id = p_agent_id AND sa.enabled = TRUE;
 
     -- Step B: User 记忆
+    -- 有 query_embedding → 向量语义检索；无 → 按 importance 排序
     SELECT profile INTO v_profile FROM users WHERE user_id = p_user_id;
 
-    SELECT jsonb_agg(jsonb_build_object(
-        'fragment_id', fragment_id, 'type', type,
-        'content', content, 'importance', importance
-    ) ORDER BY importance DESC) INTO v_fragments
-    FROM (
-        SELECT * FROM memory_fragments
-        WHERE user_id = p_user_id
-        ORDER BY importance DESC, created_at DESC
-        LIMIT p_top_k
-    ) sub;
+    IF p_query_embedding IS NOT NULL THEN
+        SELECT jsonb_agg(jsonb_build_object(
+            'fragment_id', fragment_id, 'type', type,
+            'content', content, 'importance', importance,
+            'score', 1.0 - (embedding <=> p_query_embedding)
+        ) ORDER BY embedding <=> p_query_embedding) INTO v_fragments
+        FROM (
+            SELECT * FROM memory_fragments
+            WHERE user_id = p_user_id AND embedding IS NOT NULL
+            ORDER BY embedding <=> p_query_embedding
+            LIMIT p_top_k
+        ) sub;
+    ELSE
+        SELECT jsonb_agg(jsonb_build_object(
+            'fragment_id', fragment_id, 'type', type,
+            'content', content, 'importance', importance
+        ) ORDER BY importance DESC) INTO v_fragments
+        FROM (
+            SELECT * FROM memory_fragments
+            WHERE user_id = p_user_id
+            ORDER BY importance DESC, created_at DESC
+            LIMIT p_top_k
+        ) sub;
+    END IF;
 
     -- Step C: Session 记忆
-    SELECT summary INTO v_summary FROM sessions WHERE session_id = p_session_id;
+    SELECT summary, message_count INTO v_summary, v_message_count
+    FROM sessions WHERE session_id = p_session_id;
 
     SELECT jsonb_agg(sub) INTO v_messages
     FROM (
@@ -211,6 +229,7 @@ BEGIN
         ),
         'session_memory', jsonb_build_object(
             'session_id', p_session_id,
+            'message_count', COALESCE(v_message_count, 0),
             'summary', COALESCE(to_jsonb(v_summary), 'null'::JSONB),
             'messages', COALESCE(v_messages, '[]'::JSONB)
         )
