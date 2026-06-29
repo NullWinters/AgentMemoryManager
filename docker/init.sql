@@ -139,3 +139,194 @@ CREATE INDEX idx_skills_trigger ON skills USING gin (trigger_keys);
 -- 消息工具查询
 CREATE INDEX idx_messages_tool ON messages(session_id, tool_name)
     WHERE tool_name IS NOT NULL;
+
+-- ============================================================
+-- 存储过程: sp_compose_context
+-- 三步走：读 Agent 配置 + 检索用户记忆 + 提取会话消息 → 返回结构化 JSON
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION sp_compose_context(
+    p_agent_id VARCHAR(64),
+    p_user_id VARCHAR(64),
+    p_session_id VARCHAR(64),
+    p_top_k INT DEFAULT 5
+) RETURNS JSONB AS $$
+DECLARE
+    v_agent_config JSONB;
+    v_persona TEXT;
+    v_skills JSONB;
+    v_profile JSONB;
+    v_fragments JSONB;
+    v_messages JSONB;
+    v_summary TEXT;
+    v_result JSONB;
+BEGIN
+    -- Step A: Agent 记忆
+    SELECT persona, config INTO v_persona, v_agent_config
+    FROM agents WHERE agent_id = p_agent_id;
+
+    SELECT jsonb_agg(jsonb_build_object(
+        'skill_id', s.skill_id, 'name', s.name,
+        'trigger_keys', s.trigger_keys, 'prompt_snippet', s.prompt_snippet
+    )) INTO v_skills
+    FROM skills s
+    JOIN skill_agents sa ON s.skill_id = sa.skill_id
+    WHERE sa.agent_id = p_agent_id AND sa.enabled = TRUE;
+
+    -- Step B: User 记忆
+    SELECT profile INTO v_profile FROM users WHERE user_id = p_user_id;
+
+    SELECT jsonb_agg(jsonb_build_object(
+        'fragment_id', fragment_id, 'type', type,
+        'content', content, 'importance', importance
+    ) ORDER BY importance DESC) INTO v_fragments
+    FROM (
+        SELECT * FROM memory_fragments
+        WHERE user_id = p_user_id
+        ORDER BY importance DESC, created_at DESC
+        LIMIT p_top_k
+    ) sub;
+
+    -- Step C: Session 记忆
+    SELECT summary INTO v_summary FROM sessions WHERE session_id = p_session_id;
+
+    SELECT jsonb_agg(sub) INTO v_messages
+    FROM (
+        SELECT message_id, role, content, tool_name, created_at
+        FROM messages
+        WHERE session_id = p_session_id
+        ORDER BY created_at
+        LIMIT COALESCE((v_agent_config->>'max_session_turns')::INT, 20)
+    ) sub;
+
+    -- Step D: 组装
+    v_result := jsonb_build_object(
+        'agent_memory', jsonb_build_object(
+            'agent_id', p_agent_id, 'persona', v_persona,
+            'skills', COALESCE(v_skills, '[]'::JSONB)
+        ),
+        'user_memory', jsonb_build_object(
+            'profile', COALESCE(v_profile, '{}'::JSONB),
+            'fragments', COALESCE(v_fragments, '[]'::JSONB)
+        ),
+        'session_memory', jsonb_build_object(
+            'session_id', p_session_id,
+            'summary', COALESCE(to_jsonb(v_summary), 'null'::JSONB),
+            'messages', COALESCE(v_messages, '[]'::JSONB)
+        )
+    );
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- 触发器函数: tg_audit_log
+-- 全表 DML 审计日志记录
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION tg_audit_log() RETURNS TRIGGER AS $$
+DECLARE
+    v_record_id TEXT;
+BEGIN
+    -- 不同表使用不同的主键列
+    IF TG_TABLE_NAME = 'messages' THEN
+        v_record_id := NEW.message_id::TEXT;
+    ELSE
+        v_record_id := NEW.fragment_id::TEXT;
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_log(table_name, operation, record_id, new_data, performed_by)
+        VALUES (TG_TABLE_NAME, TG_OP, v_record_id, to_jsonb(NEW), current_user);
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_log(table_name, operation, record_id, old_data, new_data, performed_by)
+        VALUES (TG_TABLE_NAME, TG_OP, v_record_id, to_jsonb(OLD), to_jsonb(NEW), current_user);
+    ELSIF TG_OP = 'DELETE' THEN
+        IF TG_TABLE_NAME = 'messages' THEN
+            v_record_id := OLD.message_id::TEXT;
+        ELSE
+            v_record_id := OLD.fragment_id::TEXT;
+        END IF;
+        INSERT INTO audit_log(table_name, operation, record_id, old_data, performed_by)
+        VALUES (TG_TABLE_NAME, TG_OP, v_record_id, to_jsonb(OLD), current_user);
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_audit_memory_fragments
+    AFTER INSERT OR UPDATE OR DELETE ON memory_fragments
+    FOR EACH ROW EXECUTE FUNCTION tg_audit_log();
+
+CREATE TRIGGER trg_audit_messages
+    AFTER INSERT OR UPDATE OR DELETE ON messages
+    FOR EACH ROW EXECUTE FUNCTION tg_audit_log();
+
+-- ============================================================
+-- 触发器函数: tg_check_message_threshold
+-- 消息超阈值标记
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION tg_check_message_threshold() RETURNS TRIGGER AS $$
+DECLARE
+    v_threshold INT;
+    v_count INT;
+BEGIN
+    SELECT (config->>'max_session_turns')::INT * 2 INTO v_threshold
+    FROM agents WHERE agent_id = (SELECT agent_id FROM sessions WHERE session_id = NEW.session_id);
+
+    -- 默认阈值
+    IF v_threshold IS NULL THEN v_threshold := 40; END IF;
+
+    SELECT COUNT(*) INTO v_count FROM messages WHERE session_id = NEW.session_id;
+
+    -- 如果消息数超过阈值，插入审计日志作为标记
+    IF v_count > v_threshold THEN
+        INSERT INTO audit_log(table_name, operation, record_id, new_data, performed_by)
+        VALUES ('messages', 'THRESH', NEW.session_id,
+                jsonb_build_object('message_count', v_count, 'threshold', v_threshold),
+                'system');
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_check_threshold
+    AFTER INSERT ON messages
+    FOR EACH ROW EXECUTE FUNCTION tg_check_message_threshold();
+
+-- ============================================================
+-- 视图: v_context_preview
+-- 封装多表 JOIN 的上下文预览
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_context_preview AS
+SELECT
+    s.session_id, s.agent_id, s.user_id, s.message_count, s.summary,
+    a.name AS agent_name, a.status AS agent_status,
+    u.profile AS user_profile,
+    COUNT(f.fragment_id) AS memory_fragment_count
+FROM sessions s
+LEFT JOIN agents a ON s.agent_id = a.agent_id
+LEFT JOIN users u ON s.user_id = u.user_id
+LEFT JOIN memory_fragments f ON s.user_id = f.user_id
+GROUP BY s.session_id, s.agent_id, s.user_id, s.message_count, s.summary,
+         a.name, a.status, u.profile;
+
+-- ============================================================
+-- 视图: v_memory_stats
+-- 每用户记忆统计
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_memory_stats AS
+SELECT
+    u.user_id,
+    COUNT(f.fragment_id) AS total_fragments,
+    AVG(f.importance) AS avg_importance,
+    COUNT(DISTINCT f.type) AS type_count,
+    MAX(f.created_at) AS last_memory_at
+FROM users u
+LEFT JOIN memory_fragments f ON u.user_id = f.user_id
+GROUP BY u.user_id;
