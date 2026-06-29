@@ -31,7 +31,6 @@ DATABASE_URL = os.getenv(
     "postgresql+asyncpg://memory:memorypass@localhost:5432/memorydb",
 )
 MEMORY_API_KEY = os.getenv("MEMORY_API_KEY", "")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 MAX_SESSION_TURNS = int(os.getenv("MAX_SESSION_TURNS", "20"))
 USER_MEMORY_TOP_K = int(os.getenv("USER_MEMORY_TOP_K", "5"))
 ```
@@ -66,7 +65,7 @@ async def get_db() -> AsyncSession:
 | `AuditLog` | log_id(BIGSERIAL), table_name, operation, record_id, old_data(JSONB), new_data(JSONB) |
 | `MemoryArchive` | archive_id(UUID), fragment_id, user_id, content, reason |
 
-参考 `设计.md` 第三章 DDL 逐字段映射。
+参考 `docs/设计.md` 第三章 DDL 逐字段映射。
 
 ## 2.4 创建 docker/init.sql
 
@@ -93,7 +92,7 @@ docker compose exec db psql -U memory -d memorydb -c "\dt"
 - `src/config.py` — 6 个环境变量，含 `python-dotenv` 加载
 - `src/database.py` — `DeclarativeBase` + async engine (pool_size=20) + `get_db` 依赖注入
 - `src/models/database.py` — 9 张表 ORM 模型:
-  - 使用 `pgvector.sqlalchemy.Vector(1536)` 类型（MemoryFragment / Message）
+  - 使用 `pgvector.sqlalchemy.Vector` 类型（无维度约束，MemoryFragment / Message）
   - 仅定义 `ForeignKey`，不定义 `relationship()`（避免 async lazy loading）
   - UUID 主键使用 `gen_random_uuid()`
   - `AuditLog` 使用 `BigInteger` + `Identity()`
@@ -364,7 +363,7 @@ class SessionService:
 
 ## 6.2 创建 src/routers/sessions.py
 
-实现 5 个端点，Pydantic schema 参考 `设计.md` §四：
+实现 5 个端点，Pydantic schema 参考 `docs/设计.md` §四：
 - `POST /api/v1/sessions` — `SessionCreate(agent_id, user_id, session_id?)` → `SessionResponse`
 - `GET /api/v1/sessions/{session_id}` — 返回 Session + message_count + summary
 - `PATCH /api/v1/sessions/{session_id}` — `SessionUpdate(status)` → 响应

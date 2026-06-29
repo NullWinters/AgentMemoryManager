@@ -159,7 +159,7 @@ class MemoryFragmentResponse(BaseModel):
 
 ## 5.3 创建 src/routers/users.py
 
-实现端点（参考 `设计.md` §四）：
+实现端点（参考 `docs/设计.md` §四）：
 
 | 方法 | 路径 | 功能 |
 |------|------|------|

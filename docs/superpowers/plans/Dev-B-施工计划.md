@@ -97,206 +97,79 @@ Pydantic Schemas: `SkillCreate`, `SkillUpdate`, `SkillResponse`
 
 **预估:** 3h | **依赖:** 无
 
-LLM 模块完全可选，设计为独立于其他模块的包。如果 `agents.config.llm` 未配置，所有功能自动降级。
+**完成状态:** ✅ 已完成 (2026-06-29)
 
-## 8.1 创建 src/llm/__init__.py
+### 设计决策
 
-```python
-from src.llm.provider import LLMProvider
-from src.llm.extractor import MemoryExtractor
-from src.llm.summarizer import SessionSummarizer
-from src.llm.embedder import TextEmbedder
-```
+| # | 决策点 | 选择 | 说明 |
+|---|--------|------|------|
+| 1 | httpx client 生命周期 | 每调用新建 (`async with AsyncClient`) | Provider 生命周期 = 单次 LLM 任务，多 Agent 多 endpoint 不能共享连接 |
+| 2 | 信号量作用域 | 类级别 `LLMProvider._semaphore` | 全局 5 并发，所有 Provider 实例共享 |
+| 3 | DB 会话生命周期 | BackgroundTasks + LLMService 独立 session | `LLMService.run_post_message` 创建 `async_session()`，与请求 session 分离 |
+| 4 | 集成代码位置 | Router 层 `BackgroundTasks.add_task()` | 与 sessions 已有模式一致，Service 保持单一职责 |
+| 5 | LLM / Embedding 配置分离 | 独立 `config.llm` + `config.embedding` 两块 | 兼容不同 Provider（如 Chat 用 DeepSeek、Embedding 用 GITEE AI） |
+| 6 | VECTOR 维度约束 | 移除固定 1536 维 → `VECTOR`（无维度） | 不同 Provider 返回不同维度（OpenAI=1536, GITEE=1024） |
+| 7 | memory_fragments.embedding 写入 | LLMService 为 fragment 生成 embedding | 闭合 IVFFlat 索引 ↔ 写入的 gap |
 
-## 8.2 创建 src/llm/provider.py
+### 实际产出
 
-```python
-import httpx
-import logging
+#### 8.1 `src/llm/__init__.py` (8 行)
+重导出 `LLMProvider`, `TextEmbedder`, `SessionSummarizer`, `MemoryExtractor`, `MemoryFragmentData`
 
-logger = logging.getLogger(__name__)
+#### 8.2 `src/llm/provider.py` (50 行)
+- `LLMProvider._semaphore` — 类级 `asyncio.Semaphore(5)`
+- 每 `chat()` 调用 `async with httpx.AsyncClient(...)` — 自动清理
+- `chat()` 返回 `str | None`，异常兜底 `logger.warning`
+- 无 `self.http` — 不创建实例级 client
 
-class LLMProvider:
-    """OpenAI API 兼容的 LLM 客户端"""
+#### 8.3 `src/llm/embedder.py` (35 行)
+- `TextEmbedder(provider, embedding_model)`
+- 通过 `LLMProvider._semaphore` 控制并发
+- 每 `embed()` 调用新建 `httpx.AsyncClient`
+- 返回 `list[float] | None`
 
-    def __init__(self, api_key: str, base_url: str = None,
-                 model: str = "gpt-4o-mini", timeout: float = 30.0):
-        self.api_key = api_key
-        self.base_url = (base_url or "https://api.openai.com").rstrip("/")
-        self.model = model
-        self.timeout = timeout
-        self.semaphore = asyncio.Semaphore(5)
+#### 8.4 `src/llm/summarizer.py` (25 行)
+- `SessionSummarizer(provider)`
+- `summarize(messages: list[dict]) → str | None`
 
-    async def chat(self, messages: list[dict], temperature: float = 0.3,
-                   max_tokens: int = 500, response_format: dict = None) -> str | None:
-        async with self.semaphore:
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    body = {
-                        "model": self.model,
-                        "messages": messages,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens,
-                    }
-                    if response_format:
-                        body["response_format"] = response_format
+#### 8.5 `src/llm/extractor.py` (45 行)
+- `MemoryExtractor(provider)`
+- 返回 `ExtractionResult` TypedDict: `{fragments: [...], profile_updates: {...}}`
+- JSON 解析失败兜底返回空结果
 
-                    resp = await client.post(
-                        f"{self.base_url}/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {self.api_key}"},
-                        json=body,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    return data["choices"][0]["message"]["content"]
-            except Exception as e:
-                logger.warning(f"LLM call failed: {e}")
-                return None
-```
+#### 8.6 `src/services/llm_service.py` (120 行)
+- `LLMService.run_post_message(session_id, message_id, content, agent_id, user_id)` — 静态方法
+- 独立 `async_session()` — 不依赖请求 session
+- **LLM / Embedding 分离** — `config.llm` 创建 `chat_provider`，`config.embedding` 创建 `embed_provider`
+  - `embed_config` 为空时 fallback 到 `llm_config`（向后兼容）
+  - `LLMProvider.__init__` 自动剥离 base_url 末尾 `/v1`（支持 GITEE AI 等含 `/v1` 的 URL）
+- 降级：`api_key` 为空 → 立即 return
+- **memory_fragment embedding gap 修复**: 每创建 fragment 时调用 `embedder.embed(frag["content"])` 写入 `embedding` 列
+- 写入 `messages.embedding` / `sessions.summary` / `memory_fragments` / `users.profile`
 
-## 8.3 创建 src/llm/embedder.py
+#### 8.7 数据库 schema 变更
+- `VECTOR(1536)` → `VECTOR` 无维度约束 — `src/models/database.py`, `docker/init.sql`
+- 完整流程：查 Agent 配置 → embed message → 超阈值(40条)时 summarize + extract
+- 写入 `messages.embedding` / `sessions.summary` / `memory_fragments` / `users.profile`
 
-```python
-class TextEmbedder:
-    def __init__(self, provider: LLMProvider, embedding_model: str = "text-embedding-3-small"):
-        self.provider = provider
-        self.model = embedding_model
+#### 8.7 修改 `src/routers/sessions.py`
+- 导入 `BackgroundTasks`, `LLMService`
+- `add_message` 端点注入 `background_tasks: BackgroundTasks`
+- 消息写入后调用 `background_tasks.add_task(LLMService.run_post_message, ...)`
 
-    async def embed(self, text: str) -> list[float] | None:
-        async with self.provider.semaphore:
-            try:
-                async with httpx.AsyncClient(timeout=self.provider.timeout) as client:
-                    resp = await client.post(
-                        f"{self.provider.base_url}/v1/embeddings",
-                        headers={"Authorization": f"Bearer {self.provider.api_key}"},
-                        json={"model": self.model, "input": text},
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    return data["data"][0]["embedding"]
-            except Exception as e:
-                logger.warning(f"Embedding failed: {e}")
-                return None
-```
+### 验证结果
 
-## 8.4 创建 src/llm/summarizer.py
+**降级测试（无 API Key）：**
+- Agent 无 llm.config → Session + Message 正常创建 (200) ✓
+- `LLMService.run_post_message` 检测 `api_key` 为空 → 立即 return ✓
+- `messages.embedding` 为 NULL ✓
 
-```python
-class SessionSummarizer:
-    def __init__(self, provider: LLMProvider):
-        self.provider = provider
-
-    async def summarize(self, messages: list[dict]) -> str | None:
-        conversation = "\n".join(
-            f"{m['role']}: {m['content']}" for m in messages
-        )
-        system_msg = "你是记忆管理助手。请用1-3句话总结以下对话的关键信息。只输出摘要，不要额外解释。"
-        result = await self.provider.chat([
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": f"对话：\n{conversation}"},
-        ])
-        return result
-```
-
-## 8.5 创建 src/llm/extractor.py
-
-```python
-import json
-
-class MemoryExtractor:
-    def __init__(self, provider: LLMProvider):
-        self.provider = provider
-
-    async def extract(self, messages: list[dict]) -> dict:
-        conversation = "\n".join(
-            f"{m['role']}: {m['content']}" for m in messages
-        )
-        system_msg = (
-            "你是记忆管理助手。分析以下对话，提取关于用户的关键信息。\n"
-            '输出格式（JSON）：{"fragments": [{"type":"preference/fact","content":"...","importance":0.0-1.0}],'
-            '"profile_updates": {"key":{"v":"value","c":0.0-1.0}}}'
-        )
-        result = await self.provider.chat(
-            [
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": f"对话：\n{conversation}\n请只输出JSON，不要额外内容。"},
-            ],
-            response_format={"type": "json_object"},
-        )
-        if result:
-            try:
-                return json.loads(result)
-            except json.JSONDecodeError:
-                return {"fragments": [], "profile_updates": {}}
-        return {"fragments": [], "profile_updates": {}}
-```
-
-## 8.6 LLM 模块集成点
-
-在 `src/services/session_service.py` 的 `add_message` 方法中，异步调用：
-
-```python
-# add_message 方法末尾追加：
-import asyncio
-from src.llm import LLMProvider, TextEmbedder, SessionSummarizer, MemoryExtractor
-
-# 获取 agent config 判断 LLM 是否启用
-agent = await self.get_agent(session.agent_id)
-llm_config = agent.config.get("llm", {})
-if llm_config.get("api_key"):
-    provider = LLMProvider(
-        api_key=llm_config["api_key"],
-        base_url=llm_config.get("base_url"),
-        model=llm_config.get("model", "gpt-4o-mini"),
-    )
-    embedder = TextEmbedder(provider, llm_config.get("embedding_model", "text-embedding-3-small"))
-    summarizer = SessionSummarizer(provider)
-    extractor = MemoryExtractor(provider)
-
-    # 异步后台任务
-    async def _llm_tasks():
-        # 4a. 生成 embedding
-        emb = await embedder.embed(content)
-        if emb:
-            await self.db.execute(
-                update(Message).where(Message.message_id == message.message_id)
-                .values(embedding=emb)
-            )
-
-        # 4b/c. 如果消息数超阈值
-        msg_count = (await self.db.execute(
-            select(func.count()).where(Message.session_id == session_id)
-        )).scalar()
-        if msg_count > 40:
-            all_msgs = await self.get_messages(session_id, limit=msg_count)
-            msgs_data = [{"role": m.role, "content": m.content} for m in all_msgs]
-            # 摘要
-            summary = await summarizer.summarize(msgs_data)
-            if summary:
-                await self.db.execute(
-                    update(Session).where(Session.session_id == session_id).values(summary=summary)
-                )
-            # 记忆提取
-            extracted = await extractor.extract(msgs_data)
-            for frag in extracted.get("fragments", []):
-                await self.db.add(MemoryFragment(
-                    user_id=session.user_id, type=frag["type"],
-                    content=frag["content"], importance=frag["importance"]
-                ))
-            # profile 更新
-            profile_updates = extracted.get("profile_updates", {})
-            if profile_updates:
-                user = await self.db.execute(select(User).where(User.user_id == session.user_id))
-                user_row = user.scalar_one_or_none()
-                if user_row:
-                    existing_profile = user_row.profile or {}
-                    existing_profile.update(profile_updates)
-                    user_row.profile = existing_profile
-
-        await self.db.commit()
-
-    asyncio.create_task(_llm_tasks())
-```
+**全功能测试（DeepSeek Chat + GITEE AI Embedding）：**
+- `messages.embedding`: YES (1024d) ✓
+- `sessions.summary`: YES (DeepSeek 生成) ✓
+- `memory_fragments`: 1 条, embedding=YES (1024d) ✓ — gap 已修复
+- `users.profile`: 已更新 ✓
+- LLM/Embedding 分离配置正常工作 ✓
 
 ---
 

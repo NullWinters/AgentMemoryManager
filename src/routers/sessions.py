@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_db
+from src.services.llm_service import LLMService
 from src.services.session_service import SessionService
 
 router = APIRouter(tags=["sessions"])
@@ -97,7 +98,12 @@ async def update_session(session_id: str, body: SessionUpdate, db: AsyncSession 
 
 
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
-async def add_message(session_id: str, body: MessageCreate, db: AsyncSession = Depends(get_db)):
+async def add_message(
+    session_id: str,
+    body: MessageCreate,
+    db: AsyncSession = Depends(get_db),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
     svc = _service(db)
     session = await svc.get_session(session_id)
     if not session:
@@ -108,6 +114,14 @@ async def add_message(session_id: str, body: MessageCreate, db: AsyncSession = D
         content=body.content,
         tool_name=body.tool_name,
         tool_call_id=body.tool_call_id,
+    )
+    background_tasks.add_task(
+        LLMService.run_post_message,
+        session_id=session_id,
+        message_id=message.message_id,
+        content=body.content,
+        agent_id=session.agent_id,
+        user_id=session.user_id,
     )
     return message
 

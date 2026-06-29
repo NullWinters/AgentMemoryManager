@@ -75,7 +75,7 @@ session.add_message(role="assistant", content=response.choices[0].message.conten
 | `POST/GET/PATCH/DELETE /api/v1/skills` | Skill 管理 |
 | `GET /api/v1/health` | 健康检查 |
 
-完整文档见 [设计.md](./设计.md)。
+完整文档见 [设计.md](./docs/设计.md)。
 
 ---
 
@@ -104,8 +104,10 @@ session.add_message(role="assistant", content=response.choices[0].message.conten
 │   └── agentmemory/  # MemoryClient / Session / Context
 ├── docker/           # init.sql (DDL + 高阶 SQL)
 ├── docker-compose.yml
-├── 设计.md           # 完整设计文档
-└── docs/superpowers/plans/  # 施工计划
+├── docs/
+│   ├── 设计.md        # 完整设计文档
+│   ├── 用户手册.md     # 用户手册
+│   └── superpowers/plans/  # 施工计划
 ```
 
 ---
@@ -118,6 +120,6 @@ session.add_message(role="assistant", content=response.choices[0].message.conten
 
 ## 文档
 
-- [设计文档](./设计.md)
+- [设计文档](./docs/设计.md)
+- [用户手册](./docs/用户手册.md)
 - [总体施工计划](./docs/superpowers/plans/总体施工计划.md)
-- [个人施工计划](./docs/superpowers/plans/)
