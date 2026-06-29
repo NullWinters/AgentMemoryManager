@@ -22,169 +22,74 @@ Task 2 (Dev A) → Task 4 → Task 8 → Task 12
 
 **预估:** 3h | **依赖:** Task 2 (Dev A) 完成
 
-## 4.1 创建 src/services/agent_service.py
+**完成状态:** ✅ 已完成 (2026-06-29)
 
-```python
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from src.models.database import Agent, Skill, SkillAgent
+### 设计决策
 
-class AgentService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
+| # | 决策点 | 选择 | 说明 |
+|---|--------|------|------|
+| 1 | UUID 路径参数 | `uuid.UUID` | FastAPI 自动校验，0 样板代码 |
+| 2 | Service 更新方法 | 显式参数 | 类型安全，与 `sessions.py` 模式一致 |
+| 3 | 异常处理 | Router 转 HTTP，Service 返回 None | 延续 sessions.py 模式 |
+| 4 | `add_skill_to_agent` 跨表查询 | AgentService 直接查 skills 表 | ORM 表是共享资源，非私有财产 |
+| 5 | 响应模型 | 含 `enabled` 字段 (`AgentSkillResponse`) | 调试前端 Tab 需要 toggle 开关 |
 
-    async def create_agent(self, agent_id: str, name: str,
-                           persona: str = "", config: dict = None) -> Agent:
-        agent = Agent(
-            agent_id=agent_id, name=name, persona=persona,
-            config=config or {}
-        )
-        self.db.add(agent)
-        await self.db.commit()
-        await self.db.refresh(agent)
-        return agent
+### 实际产出
 
-    async def get_agent(self, agent_id: str) -> Agent | None:
-        result = await self.db.execute(select(Agent).where(Agent.agent_id == agent_id))
-        return result.scalar_one_or_none()
+#### 4.1 `src/services/agent_service.py` (84 行, 7 方法)
 
-    async def update_agent(self, agent_id: str, **kwargs) -> Agent | None:
-        agent = await self.get_agent(agent_id)
-        if not agent:
-            return None
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(agent, key, value)
-        await self.db.commit()
-        await self.db.refresh(agent)
-        return agent
+| 方法 | 参数变化 | 特性 |
+|------|----------|------|
+| `create_agent` | 无变化 | — |
+| `get_agent` | 无变化 | — |
+| `update_agent(agent_id, name, persona, config, status)` | `**kwargs` → 显式参数 | 类型安全 |
+| `add_skill_to_agent(agent_id, skill_id: uuid.UUID)` | `str` → `uuid.UUID`; 新增前置验证 | Agent/Skill 存在性 + 重复绑定三检查 |
+| `remove_skill_from_agent(agent_id, skill_id: uuid.UUID)` | `str` → `uuid.UUID` | — |
+| `get_agent_skills(agent_id)` | 无变化 | 仅返回 enabled=True 的 Skills |
+| `get_agent_skill_bindings(agent_id)` | **新增** | 返回所有 SkillAgent 记录（含 enabled 状态） |
 
-    async def add_skill_to_agent(self, agent_id: str, skill_id: str) -> SkillAgent:
-        sa = SkillAgent(skill_id=skill_id, agent_id=agent_id)
-        self.db.add(sa)
-        await self.db.commit()
-        return sa
+#### 4.2 `src/services/skill_service.py` (57 行, 5 方法)
 
-    async def remove_skill_from_agent(self, agent_id: str, skill_id: str) -> bool:
-        result = await self.db.execute(
-            select(SkillAgent).where(
-                SkillAgent.agent_id == agent_id,
-                SkillAgent.skill_id == skill_id
-            )
-        )
-        sa = result.scalar_one_or_none()
-        if sa:
-            await self.db.delete(sa)
-            await self.db.commit()
-            return True
-        return False
+| 方法 | 参数变化 |
+|------|----------|
+| `create_skill`, `list_skills` | 无变化 |
+| `get_skill(skill_id: uuid.UUID)` | `str` → `uuid.UUID` |
+| `update_skill(skill_id: uuid.UUID, name, trigger_keys, prompt_snippet)` | `str` → `uuid.UUID`; `**kwargs` → 显式参数 |
+| `delete_skill(skill_id: uuid.UUID)` | `str` → `uuid.UUID` |
 
-    async def get_agent_skills(self, agent_id: str) -> list[Skill]:
-        result = await self.db.execute(
-            select(Skill).join(SkillAgent)
-            .where(SkillAgent.agent_id == agent_id, SkillAgent.enabled == True)
-        )
-        return list(result.scalars().all())
-```
+#### 4.3 `src/routers/agents.py` (139 行, 6 端点)
 
-## 4.2 创建 src/services/skill_service.py
+Pydantic Schemas: `AgentCreate`, `AgentUpdate`, `AgentResponse`, `AgentSkillResponse`(含 enabled), `SkillBindingResponse`
+所有响应模型含 `model_config = ConfigDict(from_attributes=True)`
 
-```python
-class SkillService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
+| 端点 | 响应 |
+|------|------|
+| `POST /agents` | 200 OK / 409 重复 |
+| `GET /agents/{agent_id}` | 200 / 404 |
+| `PATCH /agents/{agent_id}` | 200 / 404 |
+| `POST /agents/{agent_id}/skills/{skill_id}` | 201+JSON / 404 / 409 重复 |
+| `DELETE /agents/{agent_id}/skills/{skill_id}` | 204 / 404 |
+| `GET /agents/{agent_id}/skills` | 200 (含 enabled 字段) / 404 |
 
-    async def create_skill(self, name: str, trigger_keys: list[str],
-                           prompt_snippet: str = "") -> Skill:
-        skill = Skill(name=name, trigger_keys=trigger_keys, prompt_snippet=prompt_snippet)
-        self.db.add(skill)
-        await self.db.commit()
-        await self.db.refresh(skill)
-        return skill
+#### 4.4 `src/routers/skills.py` (92 行, 5 端点)
 
-    async def list_skills(self) -> list[Skill]:
-        result = await self.db.execute(select(Skill).order_by(Skill.created_at))
-        return list(result.scalars().all())
+Pydantic Schemas: `SkillCreate`, `SkillUpdate`, `SkillResponse`
 
-    async def get_skill(self, skill_id: str) -> Skill | None:
-        result = await self.db.execute(select(Skill).where(Skill.skill_id == skill_id))
-        return result.scalar_one_or_none()
+| 端点 | 响应 |
+|------|------|
+| `POST /skills` | 201 |
+| `GET /skills` | 200 |
+| `GET /skills/{skill_id}` | 200 / 404 |
+| `PATCH /skills/{skill_id}` | 200 / 404 |
+| `DELETE /skills/{skill_id}` | 204 / 404 |
 
-    async def update_skill(self, skill_id: str, **kwargs) -> Skill | None:
-        skill = await self.get_skill(skill_id)
-        if not skill:
-            return None
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(skill, key, value)
-        await self.db.commit()
-        await self.db.refresh(skill)
-        return skill
+### 验证结果
 
-    async def delete_skill(self, skill_id: str) -> bool:
-        skill = await self.get_skill(skill_id)
-        if skill:
-            await self.db.delete(skill)
-            await self.db.commit()
-            return True
-        return False
-```
-
-## 4.3 创建 Pydantic Schemas
-
-在 `src/routers/agents.py` 和 `src/routers/skills.py` 中定义：
-
-```python
-from pydantic import BaseModel
-
-class AgentCreate(BaseModel):
-    agent_id: str
-    name: str
-    persona: str = ""
-    config: dict = {}
-
-class AgentUpdate(BaseModel):
-    name: str | None = None
-    persona: str | None = None
-    config: dict | None = None
-    status: str | None = None
-
-class SkillCreate(BaseModel):
-    name: str
-    trigger_keys: list[str]
-    prompt_snippet: str = ""
-
-class SkillUpdate(BaseModel):
-    name: str | None = None
-    trigger_keys: list[str] | None = None
-    prompt_snippet: str | None = None
-
-class SkillBindRequest(BaseModel):
-    skill_id: str
-```
-
-## 4.4 创建 src/routers/agents.py
-
-实现端点（详细实现参考 `设计.md` §四）：
-
-| 方法 | 路径 | 功能 |
-|------|------|------|
-| POST | `/api/v1/agents` | 注册 Agent |
-| GET | `/api/v1/agents/{agent_id}` | 获取 Agent 详情 |
-| PATCH | `/api/v1/agents/{agent_id}` | 更新 Agent 配置/人设 |
-| POST | `/api/v1/agents/{agent_id}/skills/{skill_id}` | 绑定 Skill 到 Agent |
-| DELETE | `/api/v1/agents/{agent_id}/skills/{skill_id}` | 解绑 Skill |
-| GET | `/api/v1/agents/{agent_id}/skills` | 查看已绑定 Skills |
-
-## 4.5 创建 src/routers/skills.py
-
-| 方法 | 路径 | 功能 |
-|------|------|------|
-| POST | `/api/v1/skills` | 创建 Skill |
-| GET | `/api/v1/skills` | 列出全部 Skills |
-| GET | `/api/v1/skills/{skill_id}` | 获取单个 Skill |
-| PATCH | `/api/v1/skills/{skill_id}` | 更新 Skill |
-| DELETE | `/api/v1/skills/{skill_id}` | 删除 Skill |
+- Agent CRUD: POST → GET → PATCH (200/404/409) ✓
+- Skill CRUD: POST → GET → PATCH → DELETE (201/200/204/404) ✓
+- Skill 绑定: POST → GET (含 enabled) → 重复绑定 409 → DELETE ✓
+- UUID 路径参数: 非法 UUID 返回 422 (FastAPI 内置) ✓
+- 跨表 FK 验证: 不存在的 Skill → 404 ✓
 
 ---
 

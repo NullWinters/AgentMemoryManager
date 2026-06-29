@@ -1,1 +1,16 @@
-# 占位文件，Task 9 替换为实际入口
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from src.routers import agents, skills
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+
+
+app = FastAPI(title="Agent Memory Manager", version="1.0.0", lifespan=lifespan)
+
+app.include_router(agents.router, prefix="/api/v1")
+app.include_router(skills.router, prefix="/api/v1")
