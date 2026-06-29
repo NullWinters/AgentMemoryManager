@@ -1,7 +1,14 @@
 .venv/
 .idea/
+.opencode/
 
 课程文档/
 
-.opencode/
 opencode.json
+
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+dist/
+build/
