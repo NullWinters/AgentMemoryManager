@@ -23,6 +23,8 @@ Task 2 (Dev A) → Task 5 → Task 10 → Task 11 → Task 12
 
 **预估:** 3h | **依赖:** Task 2 (Dev A) 完成
 
+**完成状态:** ✅ 已完成 (2026-06-30)
+
 ## 5.1 创建 src/services/user_service.py
 
 ```python
@@ -174,6 +176,8 @@ class MemoryFragmentResponse(BaseModel):
 # Task 10: Python SDK
 
 **预估:** 3h | **依赖:** Task 5 API 稳定
+
+**完成状态:** ✅ 已完成 (2026-06-30)
 
 ## 10.1 创建 sdk/setup.py
 
@@ -450,6 +454,8 @@ python -c "from agentmemory import MemoryClient; print('SDK OK')"
 # Task 11: 调试前端
 
 **预估:** 2h | **依赖:** 无（静态开发）
+
+**完成状态:** ✅ 已完成 (2026-06-30)
 
 ## 11.1 创建 src/static/debug.html
 

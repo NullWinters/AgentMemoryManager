@@ -508,7 +508,7 @@ app.mount("/debug", StaticFiles(directory="src/static", html=True), name="debug"
 - `src/routers/admin.py` — health + stats 管理端点
 
 **main.py 组装内容:**
-- 注册全部 5 个 router: agents, skills, sessions, context, admin（users 待 Dev C）
+- 注册全部 6 个 router: agents, skills, sessions, context, users, admin
 - CORS 中间件 (`allow_origins=["*"]`)
 - API Key 认证中间件（`X-API-Key` / `Authorization: Bearer`，空 `MEMORY_API_KEY` 时跳过）
 - `/debug` 路由直接返回 `static/debug.html`
