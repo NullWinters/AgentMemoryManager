@@ -537,7 +537,9 @@ python -c "from agentmemory import MemoryClient; print('SDK OK')"
 
 **执行: 全体 / 预估: 2h**
 
+**完成状态:** ✅ 已完成 (2026-06-30)
+
 按 `总体施工计划.md` Task 12 验证清单逐项执行，特别关注：
-- User Memory 向量检索 + 全文检索降级
-- SDK `pip install -e sdk/` → 端到端调用链路
-- 前端 `/debug` 页面加载 + 所有 Tab 交互正常
+- User Memory 向量检索 + 全文检索降级 ✅
+- SDK `pip install -e sdk/` → 端到端调用链路 ✅ (setup→session→message→context→to_messages→end)
+- 前端 `/debug` 页面加载 + 所有 Tab 交互正常 ✅ (Playwright 验证通过)

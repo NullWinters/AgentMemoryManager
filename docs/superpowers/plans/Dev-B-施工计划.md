@@ -199,7 +199,12 @@ async def get_llm_logs():
 
 **执行: 全体 / 预估: 2h**
 
+**完成状态:** ✅ 已完成 (2026-06-30)
+
 按 `总体施工计划.md` Task 12 验证清单逐项执行，特别关注：
-- Agent CRUD + Skill 绑定/解绑端点
-- LLM 降级模式（不配 API Key 时仍正常服务）
-- LLM 全功能模式（配置 API Key 后摘要/提取/嵌入正常）
+- Agent CRUD + Skill 绑定/解绑端点 ✅ (27 端点全部通过)
+- LLM 降级模式（不配 API Key 时仍正常服务）✅
+- LLM 全功能模式（配置 API Key 后摘要/提取/嵌入正常）✅ (DeepSeek + GITEE AI 分离模式)
+
+**发现并修复:**
+- LLM 模块 Bug：`_write_results` 中 `summary` 变量遮蔽导致阈值触发时写入跳过 — 改用独立 `threshold_exceeded` 标志

@@ -530,4 +530,22 @@ app.mount("/debug", StaticFiles(directory="src/static", html=True), name="debug"
 
 **执行: 全体 / 预估: 2h**
 
-按 `总体施工计划.md` Task 12 的验证清单逐项执行，记录结果。
+**完成状态:** ✅ 已完成 (2026-06-30)
+
+按 `总体施工计划.md` Task 12 验证清单逐项执行：
+
+| 验证项 | 结果 |
+|--------|:---:|
+| docker compose 一键启动 | ✅ (本地 uv run 方式) |
+| 27 端点遍历（含异常码） | ✅ |
+| sp_compose_context 存储过程 | ✅ |
+| 触发器 audit_log | ✅ |
+| v_memory_stats / v_context_preview 视图 | ✅ |
+| GIN 全文检索 vs LIKE | ✅ |
+| IVFFlat 向量索引 | ⚠️ VECTOR 无维度约束 |
+| 5 并发事务原子性 | ✅ |
+| SDK 端到端链路 | ✅ |
+| Playwright 前端调试 | ✅ |
+| LLM 全功能（DeepSeek + GITEE AI） | ✅ |
+
+**发现并修复:** 连接池耗尽 — `LLMService` 三阶段拆分 + pool_size 扩容。
