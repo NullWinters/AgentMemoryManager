@@ -53,6 +53,14 @@ async def ensure_user(user_id: str, db: AsyncSession = Depends(get_db)):
     return await svc.get_or_create_user(user_id)
 
 
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_user(user_id: str, db: AsyncSession = Depends(get_db)):
+    svc = _service(db)
+    deleted = await svc.delete_user(user_id)
+    if not deleted:
+        raise _not_found("User")
+
+
 @router.get("/users/{user_id}/profile", response_model=ProfileResponse)
 async def get_profile(user_id: str, db: AsyncSession = Depends(get_db)):
     svc = _service(db)
