@@ -129,5 +129,8 @@ async def add_message(
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 async def get_messages(session_id: str, limit: int = 50, db: AsyncSession = Depends(get_db)):
     svc = _service(db)
+    session = await svc.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
     messages = await svc.get_messages(session_id, limit=limit)
     return messages
