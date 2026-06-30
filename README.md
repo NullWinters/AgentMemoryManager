@@ -31,7 +31,7 @@ docker compose up -d
 
 # 宿主机默认映射 8080→容器 8000（避免与本机 8000 冲突，可在 .env 设置 API_PORT）
 curl http://localhost:8080/api/v1/health
-# → {"status":"ok","pgvector":true,"llm_enabled":false}
+# → {"status":"ok","pgvector":true}
 
 # 3. 安装 SDK
 pip install -e sdk/
