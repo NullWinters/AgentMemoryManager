@@ -143,8 +143,9 @@ tr.selected td { background: #2a3050; }
 
 <script>
 const LS_KEY = "amm_debug_state";
+const DEFAULTS = { apiBase: "http://localhost:8080", configVersion: 2 };
 let state = {
-  apiBase: "http://localhost:8080",
+  ...DEFAULTS,
   apiKey: "dev-secret",
   agents: [],
   users: {},
@@ -165,6 +166,10 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
     Object.assign(state, saved);
+    if (!saved.configVersion || saved.configVersion < 2) {
+      state.apiBase = DEFAULTS.apiBase;
+      state.configVersion = DEFAULTS.configVersion;
+    }
   } catch (_) {}
   document.getElementById("api-base").value = state.apiBase;
   document.getElementById("api-key").value = state.apiKey;
@@ -173,7 +178,7 @@ function loadState() {
 
 function persist() {
   localStorage.setItem(LS_KEY, JSON.stringify({
-    apiBase: state.apiBase, apiKey: state.apiKey,
+    apiBase: state.apiBase, apiKey: state.apiKey, configVersion: state.configVersion,
     agents: state.agents, users: state.users,
     selectedAgent: state.selectedAgent, selectedUser: state.selectedUser,
     selectedSession: state.selectedSession, llmLogs: state.llmLogs.slice(-50),
