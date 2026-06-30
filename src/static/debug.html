@@ -42,6 +42,15 @@ textarea { font-family: var(--mono); font-size: 12px; min-height: 80px; resize: 
 textarea.json-editor { min-height: 120px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
 .row > * { flex: 1; min-width: 120px; }
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 4px; }
+.form-row .field { display: flex; flex-direction: column; min-width: 0; }
+.form-row .field-grow { flex: 1 1 220px; }
+.form-row .field-sm { flex: 0 0 72px; }
+.form-row .field-md { flex: 0 0 130px; }
+.form-row .field-action { flex: 0 0 auto; }
+.form-row label { margin-bottom: 4px; }
+.form-row input, .form-row select { margin-bottom: 0; width: 100%; box-sizing: border-box; }
+.form-row .field-action .btn { width: auto; min-width: 72px; white-space: nowrap; }
 .btn { padding: 7px 14px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 13px; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
@@ -458,11 +467,11 @@ function renderUserTab() {
       <button class="btn btn-primary" onclick="saveProfile()">保存 Profile</button>
     </div>
     <div class="panel"><h3>记忆检索</h3>
-      <div class="row">
-        <div><label>关键词</label><input id="mem-query" placeholder="全文检索关键词" /></div>
-        <div style="max-width:80px"><label>top_k</label><input id="mem-topk" type="number" value="10" /></div>
-        <div style="max-width:120px"><label>type</label><input id="mem-type" placeholder="fact/preference" /></div>
-        <div style="flex:0"><label>&nbsp;</label><button class="btn btn-primary" onclick="searchMemories()">搜索</button></div>
+      <div class="form-row">
+        <div class="field field-grow"><label>关键词</label><input id="mem-query" placeholder="全文检索关键词" /></div>
+        <div class="field field-sm"><label>top_k</label><input id="mem-topk" type="number" value="10" min="1" max="100" /></div>
+        <div class="field field-md"><label>type</label><input id="mem-type" placeholder="fact / preference" /></div>
+        <div class="field field-action"><label aria-hidden="true">&nbsp;</label><button class="btn btn-primary" onclick="searchMemories()">搜索</button></div>
       </div>
       ${memHtml}
       <div style="margin-top:12px">
@@ -470,11 +479,11 @@ function renderUserTab() {
       </div>
     </div>
     <div class="panel"><h3>手动添加记忆</h3>
-      <div class="row">
-        <div style="max-width:120px"><label>type</label><input id="add-type" value="fact" /></div>
-        <div><label>content</label><input id="add-content" placeholder="记忆内容" /></div>
-        <div style="max-width:80px"><label>importance</label><input id="add-imp" type="number" value="0.5" step="0.1" min="0" max="1" /></div>
-        <div style="flex:0"><label>&nbsp;</label><button class="btn btn-primary" onclick="addMemory()">添加</button></div>
+      <div class="form-row">
+        <div class="field field-md"><label>type</label><input id="add-type" value="fact" /></div>
+        <div class="field field-grow"><label>content</label><input id="add-content" placeholder="记忆内容" /></div>
+        <div class="field field-sm"><label>importance</label><input id="add-imp" type="number" value="0.5" step="0.1" min="0" max="1" /></div>
+        <div class="field field-action"><label aria-hidden="true">&nbsp;</label><button class="btn btn-primary" onclick="addMemory()">添加</button></div>
       </div>
     </div>`;
 }
