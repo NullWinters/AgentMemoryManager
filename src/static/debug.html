@@ -51,6 +51,9 @@ textarea.json-editor { min-height: 120px; }
 .form-row label { margin-bottom: 4px; }
 .form-row input, .form-row select { margin-bottom: 0; width: 100%; box-sizing: border-box; }
 .form-row .field-action .btn { width: auto; min-width: 72px; white-space: nowrap; }
+.compose-group { display: flex; gap: 8px; flex: 1 1 320px; max-width: 720px; align-items: flex-end; min-width: 0; }
+.compose-group input { flex: 1; min-width: 0; margin-bottom: 0; width: auto; }
+.compose-group .btn { flex-shrink: 0; margin-bottom: 0; }
 .btn { padding: 7px 14px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 13px; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
@@ -555,10 +558,12 @@ function renderSessionTab() {
       <div class="msg-list">${msgs || '<div class="empty">暂无消息</div>'}</div>
     </div>
     <div class="panel"><h3>追加测试消息</h3>
-      <div class="row">
-        <div style="max-width:120px"><label>role</label><select id="msg-role"><option>user</option><option>assistant</option><option>system</option></select></div>
-        <div><label>content</label><input id="msg-content" placeholder="消息内容" /></div>
-        <div style="flex:0"><label>&nbsp;</label><button class="btn btn-primary" onclick="addMessage()">发送</button></div>
+      <div class="form-row">
+        <div class="field field-md"><label>role</label><select id="msg-role"><option>user</option><option>assistant</option><option>system</option></select></div>
+        <div class="compose-group">
+          <input id="msg-content" placeholder="消息内容" aria-label="消息内容" />
+          <button class="btn btn-primary" onclick="addMessage()">发送</button>
+        </div>
       </div>
       <div style="margin-top:10px">
         <button class="btn btn-secondary" onclick="loadMessages()">刷新消息</button>
