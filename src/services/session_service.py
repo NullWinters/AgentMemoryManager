@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.database import Message, Session
+from src.services.user_service import UserService
 
 
 class SessionService:
@@ -13,6 +14,7 @@ class SessionService:
     async def create_session(
         self, agent_id: str, user_id: str, session_id: str = None
     ) -> Session:
+        await UserService(self.db).get_or_create_user(user_id)
         session = Session(
             session_id=session_id or f"sess_{uuid.uuid4().hex[:12]}",
             agent_id=agent_id,

@@ -336,7 +336,7 @@ function addUser() {
   if (!uid) return;
   if (!state.users[uid]) state.users[uid] = [];
   document.getElementById("new-user-id").value = "";
-  api("POST", `/api/v1/users/${uid}/memories`, { type: "fact", content: "(debug init)", importance: 0.01 })
+  api("PUT", `/api/v1/users/${uid}`)
     .catch(() => {})
     .finally(() => selectUser(uid));
 }
@@ -382,7 +382,7 @@ function renderAgentTab() {
   const a = state.agentData;
   if (!a) return '<div class="empty">加载中...</div>';
   const skillsHtml = state.agentSkills.length ? `<table><thead><tr><th>Skill</th><th>Triggers</th><th>Enabled</th><th></th></tr></thead><tbody>${
-    state.agentSkills.map(s => `<tr><td>${esc(s.name)}</td><td>${esc((s.trigger_keys||[]).join(", "))}</td><td>${s.enabled?"✓":"✗"}</td><td><button class="btn btn-danger btn-sm" onclick="unbindSkill('${s.skill_id}')">解绑</button></td></tr>`).join("")
+    state.agentSkills.map(s => `<tr><td>${esc(s.name)}</td><td>${esc((s.trigger_keys||[]).join(", "))}</td><td><label class="toggle"><input type="checkbox" ${s.enabled?"checked":""} onchange="toggleSkill('${s.skill_id}', this.checked)" /><span></span></label></td><td><button class="btn btn-danger btn-sm" onclick="unbindSkill('${s.skill_id}')">解绑</button></td></tr>`).join("")
   }</tbody></table>` : '<div class="empty">未绑定 Skill</div>';
   return `
     <div class="panel"><h3>Agent: ${esc(a.agent_id)}</h3>
@@ -426,6 +426,14 @@ async function bindSkillPrompt() {
     state.agentSkills = r2.data;
     renderTab();
   } catch (e) { alert("绑定失败"); }
+}
+
+async function toggleSkill(skillId, enabled) {
+  try {
+    await api("PATCH", `/api/v1/agents/${state.selectedAgent}/skills/${skillId}`, { enabled });
+    const r2 = await api("GET", `/api/v1/agents/${state.selectedAgent}/skills`);
+    state.agentSkills = r2.data;
+  } catch (_) { alert("更新 Skill 状态失败"); renderTab(); }
 }
 
 async function unbindSkill(sid) {
@@ -474,6 +482,7 @@ function renderUserTab() {
 async function saveProfile() {
   try {
     const profile = JSON.parse(document.getElementById("user-profile").value);
+    await api("PUT", `/api/v1/users/${state.selectedUser}`);
     const { data, elapsed } = await api("PATCH", `/api/v1/users/${state.selectedUser}/profile`, { profile });
     state.userProfile = data;
     logAction("PATCH profile", JSON.stringify(profile, null, 2), elapsed);
@@ -578,7 +587,6 @@ function toMessages(ctx) {
   }
   messages.push({ role: "system", content: sysParts.join("\n\n"), _src: "system" });
   (um.fragments || []).forEach(f => messages.push({ role: "user", content: `[历史记忆] ${f.content}`, _src: "memory" }));
-  if (sm.summary) messages.push({ role: "system", content: `[会话摘要] ${sm.summary}`, _src: "memory" });
   (sm.messages || []).forEach(m => messages.push({ role: m.role, content: m.content, _src: "session" }));
   return messages;
 }

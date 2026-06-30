@@ -107,14 +107,6 @@ class Context:
         for frag in self.user_memory.fragments:
             messages.append({"role": "user", "content": f"[历史记忆] {frag.content}"})
 
-        if self.session_memory.summary:
-            messages.append(
-                {
-                    "role": "system",
-                    "content": f"[会话摘要] {self.session_memory.summary}",
-                }
-            )
-
         for msg in self.session_memory.messages:
             messages.append({"role": msg.role, "content": msg.content})
 

@@ -152,9 +152,14 @@ class UserService:
         result = await self.db.execute(q)
         return [(frag, None) for frag in result.scalars().all()]
 
-    async def delete_memory_fragment(self, fragment_id: uuid.UUID) -> bool:
+    async def delete_memory_fragment(
+        self, user_id: str, fragment_id: uuid.UUID
+    ) -> bool:
         result = await self.db.execute(
-            select(MemoryFragment).where(MemoryFragment.fragment_id == fragment_id)
+            select(MemoryFragment).where(
+                MemoryFragment.fragment_id == fragment_id,
+                MemoryFragment.user_id == user_id,
+            )
         )
         fragment = result.scalar_one_or_none()
         if fragment:

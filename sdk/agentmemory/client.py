@@ -42,16 +42,25 @@ class MemoryClient:
         persona: str = "",
         config: dict | None = None,
     ) -> dict:
-        return self._request(
-            "POST",
-            "/api/v1/agents",
-            json={
-                "agent_id": agent_id,
-                "name": name or agent_id,
+        payload = {
+            "agent_id": agent_id,
+            "name": name or agent_id,
+            "persona": persona,
+            "config": config or {},
+        }
+        try:
+            return self._request("POST", "/api/v1/agents", json=payload)
+        except MemoryServiceError as e:
+            if e.status_code != 409:
+                raise
+            return self._request("PATCH", f"/api/v1/agents/{agent_id}", json={
+                "name": payload["name"],
                 "persona": persona,
                 "config": config or {},
-            },
-        )
+            })
+
+    def ensure_user(self, user_id: str) -> dict:
+        return self._request("PUT", f"/api/v1/users/{user_id}")
 
     def add_skill_to_agent(self, agent_id: str, skill_id: str) -> dict:
         return self._request("POST", f"/api/v1/agents/{agent_id}/skills/{skill_id}")
@@ -72,6 +81,7 @@ class MemoryClient:
     def session_start(
         self, agent_id: str, user_id: str, session_id: str | None = None
     ) -> Session:
+        self.ensure_user(user_id)
         data = self._request(
             "POST",
             "/api/v1/sessions",

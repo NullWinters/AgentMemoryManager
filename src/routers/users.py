@@ -47,6 +47,12 @@ def _not_found(entity: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"{entity} not found")
 
 
+@router.put("/users/{user_id}", response_model=ProfileResponse)
+async def ensure_user(user_id: str, db: AsyncSession = Depends(get_db)):
+    svc = _service(db)
+    return await svc.get_or_create_user(user_id)
+
+
 @router.get("/users/{user_id}/profile", response_model=ProfileResponse)
 async def get_profile(user_id: str, db: AsyncSession = Depends(get_db)):
     svc = _service(db)
@@ -132,6 +138,6 @@ async def delete_memory(
     if not await svc.get_user(user_id):
         raise _not_found("User")
 
-    deleted = await svc.delete_memory_fragment(fragment_id)
+    deleted = await svc.delete_memory_fragment(user_id, fragment_id)
     if not deleted:
         raise _not_found("Memory fragment")
