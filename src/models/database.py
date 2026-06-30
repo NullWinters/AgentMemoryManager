@@ -88,7 +88,7 @@ class MemoryFragment(Base):
     )
     type: Mapped[str] = mapped_column(String(32), nullable=False, default="fact")
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding = mapped_column(Vector(), nullable=True)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(), nullable=True)
     importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     source_msg_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     accessed_at: Mapped[datetime] = mapped_column(
@@ -134,7 +134,7 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_name: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     tool_call_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    embedding = mapped_column(Vector(), nullable=True)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
