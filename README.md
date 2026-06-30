@@ -29,8 +29,8 @@ git clone https://github.com/NullWinters/AgentMemoryManager.git
 cd AgentMemoryManager
 docker compose up -d
 
-# 2. 验证
-curl http://localhost:8000/api/v1/health
+# 宿主机默认映射 8080→容器 8000（避免与本机 8000 冲突，可在 .env 设置 API_PORT）
+curl http://localhost:8080/api/v1/health
 # → {"status":"ok","pgvector":true,"llm_enabled":false}
 
 # 3. 安装 SDK
@@ -40,7 +40,7 @@ pip install -e sdk/
 ```python
 from agentmemory import MemoryClient
 
-client = MemoryClient("http://localhost:8000", api_key="dev-secret")
+client = MemoryClient("http://localhost:8080", api_key="dev-secret")
 
 # 一次性 Setup：注册 Agent + 绑定 Skill
 client.setup(agent_id="book_bot", persona="你是书籍推荐助手...")
@@ -81,7 +81,7 @@ session.add_message(role="assistant", content=response.choices[0].message.conten
 
 ## 调试控制台
 
-浏览器打开 `http://localhost:8000/debug`，提供：
+浏览器打开 `http://localhost:8080/debug`，提供：
 
 - **Agent Info** — 人设/配置编辑、Skill 开关
 - **User Memory** — 画像查看、向量检索/全文检索

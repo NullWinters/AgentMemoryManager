@@ -122,7 +122,7 @@ tr.selected td { background: #2a3050; }
   </main>
 </div>
 <footer class="status-bar">
-  <span>API Base: <input id="api-base" value="http://localhost:8000" onchange="saveConfig()" /></span>
+  <span>API Base: <input id="api-base" value="http://localhost:8080" onchange="saveConfig()" /></span>
   <span>Key: <input id="api-key" value="dev-secret" onchange="saveConfig()" /></span>
   <span id="st-api"><span class="status-dot off"></span>Checking...</span>
   <span id="st-pgvector"><span class="status-dot off"></span>pgvector</span>
@@ -132,7 +132,7 @@ tr.selected td { background: #2a3050; }
 <script>
 const LS_KEY = "amm_debug_state";
 let state = {
-  apiBase: "http://localhost:8000",
+  apiBase: "http://localhost:8080",
   apiKey: "dev-secret",
   agents: [],
   users: {},
