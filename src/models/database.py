@@ -103,11 +103,11 @@ class Session(Base):
     __tablename__ = "sessions"
 
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    agent_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("agents.agent_id"), nullable=False
+    agent_id: Mapped[Optional[str]] = mapped_column(
+        String(64), ForeignKey("agents.agent_id", ondelete="SET NULL"), nullable=True
     )
     user_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("users.user_id"), nullable=False
+        String(64), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
