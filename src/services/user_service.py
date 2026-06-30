@@ -58,6 +58,25 @@ class UserService:
         await self.db.refresh(fragment)
         return fragment
 
+    def _rows_to_results(self, rows) -> list[tuple[MemoryFragment, float | None]]:
+        return [
+            (
+                MemoryFragment(
+                    fragment_id=row.fragment_id,
+                    user_id=row.user_id,
+                    type=row.type,
+                    content=row.content,
+                    embedding=row.embedding,
+                    importance=row.importance,
+                    source_msg_id=row.source_msg_id,
+                    accessed_at=row.accessed_at,
+                    created_at=row.created_at,
+                ),
+                float(row.score) if row.score is not None else None,
+            )
+            for row in rows
+        ]
+
     async def search_memories(
         self,
         user_id: str,
@@ -68,6 +87,7 @@ class UserService:
     ) -> list[tuple[MemoryFragment, float | None]]:
         if vector is not None:
             vec_literal = "ARRAY[" + ",".join(str(v) for v in vector) + "]::vector"
+            type_filter = "AND type = :ftype" if fragment_type else ""
             stmt = text(
                 f"""
                 SELECT fragment_id, user_id, type, content, embedding, importance,
@@ -76,36 +96,21 @@ class UserService:
                 FROM memory_fragments
                 WHERE user_id = :uid
                   AND embedding IS NOT NULL
-                  AND (:ftype IS NULL OR type = :ftype)
+                  {type_filter}
                 ORDER BY embedding <=> {vec_literal}
                 LIMIT :lim
                 """
             )
-            result = await self.db.execute(
-                stmt, {"uid": user_id, "ftype": fragment_type, "lim": top_k}
-            )
-            rows = result.fetchall()
-            return [
-                (
-                    MemoryFragment(
-                        fragment_id=row.fragment_id,
-                        user_id=row.user_id,
-                        type=row.type,
-                        content=row.content,
-                        embedding=row.embedding,
-                        importance=row.importance,
-                        source_msg_id=row.source_msg_id,
-                        accessed_at=row.accessed_at,
-                        created_at=row.created_at,
-                    ),
-                    float(row.score) if row.score is not None else None,
-                )
-                for row in rows
-            ]
+            params: dict = {"uid": user_id, "lim": top_k}
+            if fragment_type:
+                params["ftype"] = fragment_type
+            result = await self.db.execute(stmt, params)
+            return self._rows_to_results(result.fetchall())
 
         if query:
+            type_filter = "AND type = :ftype" if fragment_type else ""
             stmt = text(
-                """
+                f"""
                 SELECT fragment_id, user_id, type, content, embedding, importance,
                        source_msg_id, accessed_at, created_at,
                        ts_rank(to_tsvector('simple', content),
@@ -113,33 +118,16 @@ class UserService:
                 FROM memory_fragments
                 WHERE user_id = :uid
                   AND to_tsvector('simple', content) @@ plainto_tsquery('simple', :query)
-                  AND (:ftype IS NULL OR type = :ftype)
+                  {type_filter}
                 ORDER BY score DESC
                 LIMIT :lim
                 """
             )
-            result = await self.db.execute(
-                stmt,
-                {"query": query, "uid": user_id, "ftype": fragment_type, "lim": top_k},
-            )
-            rows = result.fetchall()
-            return [
-                (
-                    MemoryFragment(
-                        fragment_id=row.fragment_id,
-                        user_id=row.user_id,
-                        type=row.type,
-                        content=row.content,
-                        embedding=row.embedding,
-                        importance=row.importance,
-                        source_msg_id=row.source_msg_id,
-                        accessed_at=row.accessed_at,
-                        created_at=row.created_at,
-                    ),
-                    float(row.score) if row.score is not None else None,
-                )
-                for row in rows
-            ]
+            params = {"query": query, "uid": user_id, "lim": top_k}
+            if fragment_type:
+                params["ftype"] = fragment_type
+            result = await self.db.execute(stmt, params)
+            return self._rows_to_results(result.fetchall())
 
         q = (
             select(MemoryFragment)
