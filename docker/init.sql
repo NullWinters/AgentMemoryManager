@@ -69,8 +69,8 @@ CREATE TABLE memory_fragments (
 
 CREATE TABLE sessions (
     session_id    VARCHAR(64) PRIMARY KEY,
-    agent_id      VARCHAR(64) NOT NULL REFERENCES agents(agent_id),
-    user_id       VARCHAR(64) NOT NULL REFERENCES users(user_id),
+    agent_id      VARCHAR(64) REFERENCES agents(agent_id) ON DELETE SET NULL,
+    user_id       VARCHAR(64) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     status        VARCHAR(16) NOT NULL DEFAULT 'active',
     message_count INT NOT NULL DEFAULT 0,
     summary       TEXT,
