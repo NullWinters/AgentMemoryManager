@@ -292,6 +292,28 @@ docker compose exec db psql -U memory -d memorydb -c "\dv"
 docker compose exec db psql -U memory -d memorydb -c "SELECT * FROM pg_trigger WHERE tgname LIKE 'trg_%';"
 ```
 
+**完成状态:** ✅ 已完成 (2026-06-29)
+
+**实际产出:**
+- `docker/init.sql` 追加 191 行：1 存储过程 + 2 触发器函数 + 3 触发器 + 2 视图
+- `sp_compose_context` — 三步读取三层记忆，组装 JSONB 返回
+- `tg_audit_log` — 通用 DML 审计触发器函数，根据 TG_TABLE_NAME 动态选择主键列
+- `trg_audit_memory_fragments` + `trg_audit_messages` — 两个审计触发器
+- `tg_check_message_threshold` + `trg_check_threshold` — 消息超阈值标记触发器
+- `v_context_preview` — 多表 JOIN 上下文预览视图
+- `v_memory_stats` — 每用户记忆统计视图
+
+**Bug 修复:**
+- tg_audit_log: 计划代码硬编码 `fragment_id`，messages 表无此列，改为根据表名动态选择主键
+- tg_check_message_threshold: 计划代码写入 `'THRESHOLD'`(9字符) 超出 `audit_log.operation VARCHAR(8)` 限制，改为 `'THRESH'`
+
+**后续增强 (2026-06-30):**
+- `sp_compose_context` 新增 `p_query_embedding VECTOR` 可选参数（LLM 向量检索汇入点）
+- Session 记忆输出新增 `message_count` 字段（设计文档 API 约定）
+- VECTOR 类型去除 1536 维度锁定，兼容任意维度 embedding
+
+**验证结果:** 本地 PostgreSQL + pgvector 实测，存储过程三层 JSON 返回正确，3 触发器正常触发，2 视图查询正确。
+
 ---
 
 # Task 6: Session & Message API
@@ -370,6 +392,23 @@ class SessionService:
 - `POST /api/v1/sessions/{session_id}/messages` — `MessageCreate(role, content, ...)` → `MessageResponse`
 - `GET /api/v1/sessions/{session_id}/messages?limit=50` — 返回消息列表
 
+**完成状态:** ✅ 已完成 (2026-06-29)
+
+**实际产出:**
+- `src/services/session_service.py` — SessionService 类 5 方法
+- `src/routers/sessions.py` — 5 Pydantic schema + 5 REST 端点
+
+**关键实现:**
+- `create_session`: 自动生成 `sess_{12位hex}` 格式 session_id
+- `add_message`: INSERT message + UPDATE `message_count` 自增（`Session.message_count + 1`，SQL 原子操作）
+- Router 层 404 保护：操作不存在 session 返回 404 而非 500 FK 错误
+- `MessageResponse.message_id` 使用 `uuid.UUID` 类型（配合 `from_attributes=True`）
+
+**后续集成 (2026-06-30):**
+- Dev B LLM 模块集成：`add_message` 端点增加 `BackgroundTasks` 触发 `LLMService.run_post_message`
+
+**验证结果:** 全 6 个 HTTP 端点测试通过（ASGI 传输 + uvicorn），计数器原子自增正确，404 处理正确。
+
 ---
 
 # Task 7: Context Composition API
@@ -405,6 +444,25 @@ class ContextService:
 - 接收 `ContextRequest(agent_id, user_id, session_id, query?, options?)`
 - 调用 `ContextService.compose_context(...)`
 - 返回 `ContextResponse`
+
+**完成状态:** ✅ 已完成 (2026-06-30)
+
+**实际产出:**
+- `src/services/context_service.py` — ContextService 类，`compose_context` 方法
+- `src/routers/context.py` — 5 Pydantic schema + `POST /api/v1/context` 端点
+
+**关键实现:**
+- 双路径设计：`query_embedding` 传入时走向量语义检索，NULL 时走 importance 降级
+- `ContextOptions.query_embedding` — LLM 向量检索汇入点
+- `AgentMemoryResponse.persona` 为可选字段（agent 不存在时返回 null）
+- SQL 向量字面量拼接 `ARRAY[...]::vector`（安全：仅浮点数列表）
+
+**Pydantic Schema:**
+- `ContextRequest`: agent_id, user_id, session_id, query?, options?
+- `ContextOptions`: max_session_turns(20), user_memory_top_k(5), include_skills(true), include_profile(true), query_embedding?
+- `ContextResponse`: agent_memory + user_memory + session_memory 三层嵌套
+
+**验证结果:** 全 4 场景测试通过：完整三层上下文 / 最小请求 / 不存在 ID 优雅降级 / Top-K 限制。
 
 ---
 
@@ -442,6 +500,29 @@ app.mount("/debug", StaticFiles(directory="src/static", html=True), name="debug"
 ## 9.2 API Key 中间件
 
 在 `src/main.py` 中加入：如果 `MEMORY_API_KEY` 不为空，校验 `X-API-Key` 或 `Authorization: Bearer` header。
+
+**完成状态:** ✅ 已完成 (2026-06-30)
+
+**实际产出:**
+- `src/main.py` — 完整 FastAPI 应用组装
+- `src/routers/admin.py` — health + stats 管理端点
+
+**main.py 组装内容:**
+- 注册全部 5 个 router: agents, skills, sessions, context, admin（users 待 Dev C）
+- CORS 中间件 (`allow_origins=["*"]`)
+- API Key 认证中间件（`X-API-Key` / `Authorization: Bearer`，空 `MEMORY_API_KEY` 时跳过）
+- `/debug` 路由直接返回 `static/debug.html`
+- lifespan 上下文管理器
+
+**admin.py 端点:**
+- `GET /api/v1/health` — 返回 `{"status":"ok","pgvector":true/false}`
+- `GET /api/v1/stats` — 返回 `v_memory_stats` 视图的每用户记忆统计
+
+**设计偏差:**
+- 原计划用 `StaticFiles(app.mount)` 服务 debug.html，实际使用 `@app.get("/debug")` + `FileResponse`（避免 Starlette mount 与路由冲突）
+- `config.py` 经设计变更移除 `EMBEDDING_DIM`，VECTOR 类型去除维度约束
+
+**验证结果:** 全链路 uvicorn + curl 测试通过：health/stats/agents/skills/sessions/context/debug 全部返回正确。
 
 ---
 
