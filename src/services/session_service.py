@@ -31,10 +31,13 @@ class SessionService:
         )
         return result.scalar_one_or_none()
 
-    async def update_session_status(self, session_id: str, status: str) -> Session | None:
+    async def update_session(self, session_id: str, status: str = None, agent_id: str = None) -> Session | None:
         session = await self.get_session(session_id)
         if session:
-            session.status = status
+            if status is not None:
+                session.status = status
+            if agent_id is not None:
+                session.agent_id = agent_id
             await self.db.commit()
             await self.db.refresh(session)
         return session
@@ -64,6 +67,14 @@ class SessionService:
         await self.db.commit()
         await self.db.refresh(message)
         return message
+
+    async def delete_session(self, session_id: str) -> bool:
+        session = await self.get_session(session_id)
+        if not session:
+            return False
+        await self.db.delete(session)
+        await self.db.commit()
+        return True
 
     async def get_messages(self, session_id: str, limit: int = 50) -> list[Message]:
         result = await self.db.execute(
