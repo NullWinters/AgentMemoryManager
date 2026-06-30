@@ -3,125 +3,389 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent Memory Manager · Debug Console</title>
+<title>Agent Memory Manager</title>
 <style>
+/* ============================================================
+   Design Tokens
+   ============================================================ */
 :root {
-  --bg: #0f1117; --bg2: #1a1d27; --bg3: #252836; --border: #2e3348;
-  --text: #e4e6ef; --text2: #9399b2; --accent: #6c8cff; --accent2: #4ade80;
-  --danger: #f87171; --warn: #fbbf24; --sys-bg: #1e3a5f; --mem-bg: #2a2a35;
-  --radius: 6px; --font: "Segoe UI", system-ui, sans-serif;
-  --mono: "Cascadia Code", "Fira Code", monospace;
+  --bg-root: #090a0f;
+  --bg-surface: #0f1119;
+  --bg-elevated: #161825;
+  --bg-overlay: #1c1f2e;
+  --border-subtle: #1e2133;
+  --border-default: #2a2d3f;
+  --text-primary: #eceef5;
+  --text-secondary: #8b8fa7;
+  --text-tertiary: #5c6079;
+  --accent: #7296ff;
+  --accent-soft: rgba(114, 150, 255, 0.12);
+  --accent-glow: rgba(114, 150, 255, 0.25);
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.12);
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --font: "Inter", "SF Pro Display", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow: 0 4px 16px rgba(0,0,0,0.3);
+  --transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ============================================================
+   Reset & Base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font); background: var(--bg-root); color: var(--text-primary);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  line-height: 1.5;
+}
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ============================================================
+   Layout
+   ============================================================ */
 .container { display: flex; flex: 1; overflow: hidden; }
-aside { background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; }
-.sidebar-left { width: 200px; min-width: 160px; }
-.sidebar-middle { width: 220px; min-width: 180px; }
-.sidebar-title { padding: 12px 14px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); }
-.sidebar-item { padding: 8px 14px; cursor: pointer; font-size: 13px; border-left: 3px solid transparent; }
-.sidebar-item:hover { background: var(--bg3); }
-.sidebar-item.active { background: var(--bg3); border-left-color: var(--accent); color: var(--accent); }
-.sidebar-item small { display: block; color: var(--text2); font-size: 11px; margin-top: 2px; }
-.sidebar-add { padding: 8px 14px; }
-.sidebar-add input { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: var(--radius); font-size: 12px; }
-.sidebar-add button { margin-top: 6px; width: 100%; padding: 6px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); cursor: pointer; font-size: 12px; }
-.main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.tabs { display: flex; gap: 2px; padding: 8px 12px 0; background: var(--bg2); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.tabs button { padding: 8px 16px; background: transparent; border: none; color: var(--text2); cursor: pointer; font-size: 13px; border-radius: var(--radius) var(--radius) 0 0; }
-.tabs button.active { background: var(--bg); color: var(--accent); border: 1px solid var(--border); border-bottom-color: var(--bg); }
-.tab-content { flex: 1; overflow-y: auto; padding: 16px 20px; }
-.panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
-.panel h3 { font-size: 14px; margin-bottom: 12px; color: var(--text2); }
-label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
-input[type=text], input[type=number], textarea, select {
-  width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  padding: 8px 10px; border-radius: var(--radius); font-size: 13px; font-family: inherit; margin-bottom: 10px;
+
+/* ---- Sidebars ---- */
+aside {
+  background: var(--bg-surface); border-right: 1px solid var(--border-subtle);
+  overflow-y: auto; display: flex; flex-direction: column; flex-shrink: 0;
 }
-textarea { font-family: var(--mono); font-size: 12px; min-height: 80px; resize: vertical; }
-textarea.json-editor { min-height: 120px; }
-.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-.row > * { flex: 1; min-width: 120px; }
-.form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 4px; }
+.sidebar-left { width: 210px; }
+.sidebar-middle { width: 230px; }
+
+.sidebar-header {
+  padding: 16px 16px 10px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-tertiary);
+}
+
+.sidebar-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+
+.sidebar-item {
+  padding: 9px 28px 9px 12px; margin-bottom: 2px; cursor: pointer; font-size: 13px;
+  border-radius: var(--radius-sm); transition: var(--transition);
+  color: var(--text-secondary); position: relative;
+}
+.sidebar-item:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.sidebar-item.active {
+  background: var(--accent-soft); color: var(--accent); font-weight: 500;
+}
+.sidebar-item small {
+  display: block; color: var(--text-tertiary); font-size: 11px;
+  margin-top: 1px; font-weight: 400;
+}
+.sidebar-item.active small { color: var(--accent); opacity: 0.7; }
+.sidebar-item.child {
+  padding-left: 32px; font-size: 12px; position: relative;
+}
+.sidebar-item.child::before {
+  content: ""; position: absolute; left: 16px; top: 0; bottom: 0;
+  width: 1px; background: var(--border-default);
+}
+.sidebar-item.child::after {
+  content: ""; position: absolute; left: 16px; top: 50%;
+  width: 12px; height: 1px; background: var(--border-default);
+}
+.sidebar-item.child.last::before { bottom: 50%; }
+.sidebar-item.child .agent-tag {
+  display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 100px;
+  background: var(--accent-soft); color: var(--accent); margin-left: 6px;
+  font-weight: 500; vertical-align: middle;
+}
+.sidebar-del {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  opacity: 0; font-size: 15px; line-height: 1; color: var(--text-tertiary);
+  transition: var(--transition); padding: 2px 4px;
+}
+.sidebar-item:hover .sidebar-del { opacity: 0.6; }
+.sidebar-del:hover { opacity: 1 !important; color: var(--danger); }
+
+.sidebar-footer { padding: 10px 12px; border-top: 1px solid var(--border-subtle); }
+.sidebar-footer input {
+  width: 100%; background: var(--bg-root); border: 1px solid var(--border-default);
+  color: var(--text-primary); padding: 7px 10px; border-radius: var(--radius-sm);
+  font-size: 12px; font-family: var(--font); margin-bottom: 6px;
+  transition: var(--transition);
+}
+.sidebar-footer input:focus { outline: none; border-color: var(--accent); }
+.sidebar-footer input::placeholder { color: var(--text-tertiary); }
+.sidebar-footer .btn {
+  width: 100%; padding: 7px; border-radius: var(--radius-sm); font-size: 12px;
+  font-weight: 500;
+}
+
+/* ---- Main Area ---- */
+.main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* ---- Tabs ---- */
+.tabs {
+  display: flex; gap: 2px; padding: 12px 16px 0; background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle); flex-shrink: 0;
+}
+.tabs button {
+  padding: 9px 18px; background: transparent; border: none; color: var(--text-tertiary);
+  cursor: pointer; font-size: 13px; font-weight: 500; border-radius: var(--radius) var(--radius) 0 0;
+  transition: var(--transition); font-family: var(--font);
+}
+.tabs button:hover { color: var(--text-secondary); }
+.tabs button.active {
+  color: var(--accent); background: var(--bg-root);
+  border: 1px solid var(--border-subtle); border-bottom-color: var(--bg-root);
+}
+
+.tab-content {
+  flex: 1; overflow-y: auto; padding: 20px 24px; background: var(--bg-root);
+}
+
+/* ============================================================
+   Panels & Cards
+   ============================================================ */
+.panel {
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: 18px 20px; margin-bottom: 16px;
+}
+.panel-header {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 14px; letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   Form Elements
+   ============================================================ */
+label {
+  display: block; font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+  margin-bottom: 5px; letter-spacing: 0.03em; text-transform: uppercase;
+}
+input[type=text], input[type=number], input[type=url], textarea, select {
+  width: 100%; background: var(--bg-root); border: 1px solid var(--border-default);
+  color: var(--text-primary); padding: 9px 12px; border-radius: var(--radius-sm);
+  font-size: 13px; font-family: var(--font); margin-bottom: 12px;
+  transition: var(--transition);
+}
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input::placeholder, textarea::placeholder { color: var(--text-tertiary); }
+textarea { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; line-height: 1.6; }
+textarea.json-editor { min-height: 130px; }
+select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b8fa7'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
+
+.row { display: flex; gap: 14px; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 0; }
+
+.form-row {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 4px;
+}
 .form-row .field { display: flex; flex-direction: column; min-width: 0; }
-.form-row .field-grow { flex: 1 1 220px; }
-.form-row .field-sm { flex: 0 0 72px; }
-.form-row .field-md { flex: 0 0 130px; }
+.form-row .field-grow { flex: 1 1 200px; }
+.form-row .field-sm { flex: 0 0 68px; }
+.form-row .field-md { flex: 0 0 120px; }
 .form-row .field-action { flex: 0 0 auto; }
 .form-row label { margin-bottom: 4px; }
-.form-row input, .form-row select { margin-bottom: 0; width: 100%; box-sizing: border-box; }
-.form-row .field-action .btn { width: auto; min-width: 72px; white-space: nowrap; }
-.compose-group { display: flex; gap: 8px; flex: 1 1 320px; max-width: 720px; align-items: flex-end; min-width: 0; }
-.compose-group input { flex: 1; min-width: 0; margin-bottom: 0; width: auto; }
-.compose-group .btn { flex-shrink: 0; margin-bottom: 0; }
-.btn { padding: 7px 14px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 13px; }
+.form-row input, .form-row select { margin-bottom: 0; }
+.compose-group { display: flex; gap: 8px; flex: 1 1 300px; align-items: flex-end; min-width: 0; }
+.compose-group input { flex: 1; min-width: 0; margin-bottom: 0; }
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+  padding: 8px 16px; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 13px; font-weight: 500; font-family: var(--font);
+  transition: var(--transition); letter-spacing: 0.01em;
+}
+.btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--accent); color: #fff; }
-.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-primary:hover { filter: brightness(1.12); }
+.btn-secondary {
+  background: var(--bg-elevated); color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.btn-secondary:hover { border-color: var(--text-tertiary); }
 .btn-danger { background: var(--danger); color: #fff; }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-danger:hover { filter: brightness(1.12); }
+.btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 5px; }
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* ============================================================
+   Tables
+   ============================================================ */
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-th { color: var(--text2); font-weight: 500; font-size: 11px; text-transform: uppercase; }
-tr:hover td { background: var(--bg3); }
-tr.selected td { background: #2a3050; }
-.toggle { position: relative; width: 36px; height: 20px; display: inline-block; }
+thead th {
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-default);
+  color: var(--text-tertiary); font-weight: 600; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+tbody td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+tbody tr { transition: var(--transition); }
+tbody tr:hover td { background: var(--bg-elevated); }
+tbody tr.selected td { background: var(--accent-soft); }
+
+/* ============================================================
+   Toggle Switch
+   ============================================================ */
+.toggle { position: relative; width: 38px; height: 22px; display: inline-block; }
 .toggle input { opacity: 0; width: 0; height: 0; }
-.toggle span { position: absolute; inset: 0; background: var(--bg3); border-radius: 20px; cursor: pointer; transition: .2s; }
-.toggle span:before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: var(--text2); border-radius: 50%; transition: .2s; }
+.toggle span {
+  position: absolute; inset: 0; background: var(--border-default);
+  border-radius: 22px; cursor: pointer; transition: var(--transition);
+}
+.toggle span::before {
+  content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+  background: var(--text-secondary); border-radius: 50%; transition: var(--transition);
+}
 .toggle input:checked + span { background: var(--accent); }
-.toggle input:checked + span:before { transform: translateX(16px); background: #fff; }
-.msg-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
-.msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
-.msg-bubble.user { align-self: flex-start; background: var(--bg3); border-bottom-left-radius: 4px; }
-.msg-bubble.assistant { align-self: flex-end; background: #1e3a5f; border-bottom-right-radius: 4px; }
-.msg-bubble.system { align-self: center; background: var(--mem-bg); font-size: 12px; color: var(--text2); max-width: 90%; }
-.msg-role { font-size: 10px; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; }
-.ctx-msg { padding: 10px 14px; border-radius: var(--radius); margin-bottom: 8px; font-size: 13px; border-left: 4px solid var(--border); }
-.ctx-msg.system { background: var(--sys-bg); border-left-color: #3b82f6; }
-.ctx-msg.memory { background: var(--mem-bg); border-left-color: var(--text2); }
-.ctx-msg.session { background: var(--bg3); border-left-color: var(--accent); }
-.ctx-meta { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
-.ctx-content { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px; }
-.status-bar { display: flex; align-items: center; gap: 20px; padding: 6px 16px; background: var(--bg2); border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); flex-wrap: wrap; }
-.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-.status-dot.ok { background: var(--accent2); }
-.status-dot.err { background: var(--danger); }
-.status-dot.off { background: var(--text2); }
-.status-bar input { width: 200px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 3px 8px; border-radius: 4px; font-size: 12px; }
-.empty { color: var(--text2); font-size: 13px; padding: 20px; text-align: center; }
+.toggle input:checked + span::before { transform: translateX(16px); background: #fff; }
+
+/* ============================================================
+   Message Bubbles
+   ============================================================ */
+.msg-list { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding: 4px 0; }
+.msg-bubble {
+  max-width: 72%; padding: 11px 16px; border-radius: var(--radius-lg); font-size: 13px;
+  line-height: 1.6; animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.msg-bubble.user {
+  align-self: flex-start; background: var(--bg-elevated);
+  border-bottom-left-radius: 5px; border: 1px solid var(--border-subtle);
+}
+.msg-bubble.assistant {
+  align-self: flex-end; background: linear-gradient(135deg, #1e3055, #1a2640);
+  border-bottom-right-radius: 5px; border: 1px solid #243a5e;
+}
+.msg-bubble.system {
+  align-self: center; background: transparent; border: 1px dashed var(--border-default);
+  font-size: 12px; color: var(--text-tertiary); max-width: 85%;
+}
+.msg-role {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+  margin-bottom: 5px; text-transform: uppercase;
+}
+.msg-bubble.user .msg-role { color: var(--accent); }
+.msg-bubble.assistant .msg-role { color: var(--success); }
+
+/* ============================================================
+   Context Preview Messages
+   ============================================================ */
+.ctx-msg {
+  padding: 12px 16px; border-radius: var(--radius); margin-bottom: 8px;
+  font-size: 13px; border-left: 3px solid var(--border-default);
+  background: var(--bg-surface);
+}
+.ctx-msg.system { border-left-color: var(--accent); background: var(--accent-soft); }
+.ctx-msg.memory { border-left-color: var(--text-tertiary); background: var(--bg-elevated); }
+.ctx-msg.session { border-left-color: var(--border-default); }
+.ctx-meta { font-size: 11px; color: var(--text-tertiary); margin-bottom: 5px; font-weight: 500; }
+.ctx-content { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px; color: var(--text-secondary); }
+
+/* ============================================================
+   Status Bar
+   ============================================================ */
+.status-bar {
+  display: flex; align-items: center; gap: 20px; padding: 8px 20px;
+  background: var(--bg-surface); border-top: 1px solid var(--border-subtle);
+  font-size: 12px; color: var(--text-tertiary); flex-shrink: 0;
+}
+.status-indicator { display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.online { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-dot.offline { background: var(--danger); }
+.status-dot.idle { background: var(--text-tertiary); }
+.status-bar input {
+  width: 180px; background: var(--bg-root); border: 1px solid var(--border-default);
+  color: var(--text-primary); padding: 5px 10px; border-radius: 5px;
+  font-size: 12px; font-family: var(--mono);
+}
+
+/* ============================================================
+   Badges & Tags
+   ============================================================ */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px;
+  border-radius: 100px; font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+}
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.danger { background: var(--danger-soft); color: var(--danger); }
+.badge.neutral { background: var(--bg-elevated); color: var(--text-secondary); }
+
+/* ============================================================
+   Empty & Loading States
+   ============================================================ */
+.empty {
+  color: var(--text-tertiary); font-size: 13px; padding: 32px 20px; text-align: center;
+}
+.empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.4; }
+
+/* ============================================================
+   Misc
+   ============================================================ */
+.token-est {
+  font-size: 12px; color: var(--warn); margin-bottom: 12px;
+  padding: 6px 10px; background: rgba(251,191,36,0.08); border-radius: var(--radius-sm);
+  display: inline-block; font-weight: 500;
+}
+.error-msg {
+  color: var(--danger); font-size: 13px; padding: 10px 14px;
+  background: var(--danger-soft); border-radius: var(--radius-sm); margin-bottom: 12px;
+}
 .log-row { cursor: pointer; }
-.log-detail { display: none; padding: 12px; background: var(--bg3); font-family: var(--mono); font-size: 11px; white-space: pre-wrap; }
+.log-detail { display: none; padding: 14px; background: var(--bg-root); font-family: var(--mono); font-size: 11px; white-space: pre-wrap; border-radius: var(--radius-sm); margin: 4px 0 8px; color: var(--text-secondary); }
 .log-detail.open { display: block; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
-.badge.ok { background: #14532d; color: var(--accent2); }
-.badge.err { background: #450a0a; color: var(--danger); }
-.token-est { font-size: 12px; color: var(--warn); margin-top: 8px; }
-.error-msg { color: var(--danger); font-size: 13px; padding: 8px; background: #450a0a33; border-radius: var(--radius); margin-bottom: 10px; }
+.divider { height: 1px; background: var(--border-subtle); margin: 14px 0; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mb-8 { margin-bottom: 8px; }
+
 @media (prefers-color-scheme: light) {
-  :root { --bg: #f5f6fa; --bg2: #fff; --bg3: #eef0f6; --border: #d8dbe8; --text: #1a1d27; --text2: #6b7280; --sys-bg: #dbeafe; --mem-bg: #f3f4f6; }
+  :root {
+    --bg-root: #f5f6fa; --bg-surface: #fff; --bg-elevated: #f0f1f6;
+    --bg-overlay: #eaebf0; --border-subtle: #e4e5ec; --border-default: #d1d3de;
+    --text-primary: #181a25; --text-secondary: #5f6278; --text-tertiary: #9a9db8;
+    --accent: #4c6ef5; --accent-soft: rgba(76,110,245,0.08);
+  }
 }
 </style>
 </head>
 <body>
 <div class="container">
+  <!-- Sidebar Left: Agents -->
   <aside class="sidebar-left">
-    <div class="sidebar-title">Agents</div>
-    <div id="agent-list"></div>
-    <div class="sidebar-add">
+    <div class="sidebar-header">Agents</div>
+    <div class="sidebar-list" id="agent-list"></div>
+    <div class="sidebar-footer">
       <input id="new-agent-id" placeholder="agent_id" />
-      <button onclick="addAgent()">+ 注册 Agent</button>
+      <button class="btn btn-primary" onclick="addAgent()">+ 注册 Agent</button>
     </div>
   </aside>
+
+  <!-- Sidebar Middle: Users & Sessions -->
   <aside class="sidebar-middle">
-    <div class="sidebar-title">Users / Sessions</div>
-    <div id="user-tree"></div>
-    <div class="sidebar-add">
+    <div class="sidebar-header">Users & Sessions</div>
+    <div class="sidebar-list" id="user-tree"></div>
+    <div class="sidebar-footer">
       <input id="new-user-id" placeholder="user_id" />
-      <button onclick="addUser()">+ 添加 User</button>
-      <input id="new-session-id" placeholder="session_id (可选)" style="margin-top:6px" />
-      <button onclick="createSession()" style="margin-top:6px">+ 创建 Session</button>
+      <button class="btn btn-secondary" onclick="addUser()" style="margin-bottom:4px">+ 添加 User</button>
+      <input id="new-session-id" placeholder="session_id（可选）" />
+      <button class="btn btn-secondary" onclick="createSession()">+ 创建 Session</button>
     </div>
   </aside>
+
+  <!-- Main Content -->
   <main class="main-area">
     <nav class="tabs" id="tabs">
       <button data-tab="agent" class="active">Agent Info</button>
@@ -133,40 +397,39 @@ tr.selected td { background: #2a3050; }
     <section class="tab-content" id="tab-content"></section>
   </main>
 </div>
+
+<!-- Status Bar -->
 <footer class="status-bar">
-  <span>API Base: <input id="api-base" value="http://localhost:8080" onchange="saveConfig()" /></span>
-  <span>Key: <input id="api-key" value="dev-secret" onchange="saveConfig()" /></span>
-  <span id="st-api"><span class="status-dot off"></span>Checking...</span>
-  <span id="st-pgvector"><span class="status-dot off"></span>pgvector</span>
-  <span id="st-llm"><span class="status-dot off"></span>LLM</span>
+  <div class="status-indicator" id="st-api"><span class="status-dot idle"></span>检查中…</div>
+  <div class="status-indicator" id="st-pgvector"><span class="status-dot idle"></span>pgvector</div>
+  <div class="status-indicator" id="st-llm"><span class="status-dot idle"></span>LLM</div>
+  <span style="flex:1"></span>
+  <label style="margin:0;text-transform:none;font-size:11px">Base</label>
+  <input id="api-base" value="http://localhost:8080" onchange="saveConfig()" style="width:180px;margin:0" />
+  <label style="margin:0;text-transform:none;font-size:11px">Key</label>
+  <input id="api-key" value="dev-secret" onchange="saveConfig()" style="width:130px;margin:0" />
 </footer>
 
 <script>
+/* ============================================================
+   State Management
+   ============================================================ */
 const LS_KEY = "amm_debug_state";
-const DEFAULTS = { apiBase: "http://localhost:8080", configVersion: 2 };
+const DEFAULTS = { apiBase: "http://localhost:8080", configVersion: 3 };
 let state = {
-  ...DEFAULTS,
-  apiKey: "dev-secret",
-  agents: [],
-  users: {},
-  selectedAgent: null,
-  selectedUser: null,
-  selectedSession: null,
-  agentData: null,
-  agentSkills: [],
-  userProfile: null,
-  memories: [],
-  messages: [],
-  contextData: null,
-  llmLogs: [],
-  tab: "agent",
+  ...DEFAULTS, apiKey: "dev-secret",
+  agents: [], agentNames: {}, users: {}, sessionAgents: {},
+  selectedAgent: null, selectedUser: null, selectedSession: null,
+  agentData: null, agentSkills: [],
+  userProfile: null, memories: [], messages: [], contextData: null,
+  llmLogs: [], tab: "agent",
 };
 
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
     Object.assign(state, saved);
-    if (!saved.configVersion || saved.configVersion < 2) {
+    if (!saved.configVersion || saved.configVersion < 3) {
       state.apiBase = DEFAULTS.apiBase;
       state.configVersion = DEFAULTS.configVersion;
     }
@@ -179,7 +442,7 @@ function loadState() {
 function persist() {
   localStorage.setItem(LS_KEY, JSON.stringify({
     apiBase: state.apiBase, apiKey: state.apiKey, configVersion: state.configVersion,
-    agents: state.agents, users: state.users,
+    agents: state.agents, agentNames: state.agentNames, users: state.users, sessionAgents: state.sessionAgents,
     selectedAgent: state.selectedAgent, selectedUser: state.selectedUser,
     selectedSession: state.selectedSession, llmLogs: state.llmLogs.slice(-50),
   }));
@@ -192,6 +455,9 @@ function saveConfig() {
   checkHealth();
 }
 
+/* ============================================================
+   API Client
+   ============================================================ */
 async function api(method, path, body) {
   const url = state.apiBase + path;
   const opts = { method, headers: { "Content-Type": "application/json" } };
@@ -213,55 +479,66 @@ function logAction(op, detail, elapsed, ok = true) {
   persist();
 }
 
+/* ============================================================
+   Health Check
+   ============================================================ */
 async function checkHealth() {
   const stApi = document.getElementById("st-api");
   const stPg = document.getElementById("st-pgvector");
   try {
     const { data } = await api("GET", "/api/v1/health");
-    stApi.innerHTML = '<span class="status-dot ok"></span>Connected';
+    stApi.innerHTML = '<span class="status-dot online"></span>Connected';
     stPg.innerHTML = data.pgvector
-      ? '<span class="status-dot ok"></span>pgvector Ready'
-      : '<span class="status-dot err"></span>pgvector Missing';
+      ? '<span class="status-dot online"></span>pgvector Ready'
+      : '<span class="status-dot offline"></span>pgvector Missing';
     updateLlmStatus();
   } catch (_) {
-    stApi.innerHTML = '<span class="status-dot err"></span>Disconnected';
-    stPg.innerHTML = '<span class="status-dot off"></span>pgvector';
-    document.getElementById("st-llm").innerHTML = '<span class="status-dot off"></span>LLM Unknown';
+    stApi.innerHTML = '<span class="status-dot offline"></span>Disconnected';
+    stPg.innerHTML = '<span class="status-dot idle"></span>pgvector';
+    document.getElementById("st-llm").innerHTML = '<span class="status-dot idle"></span>LLM Unknown';
   }
 }
 
 function updateLlmStatus() {
-  const st = document.getElementById("st-llm");
   const cfg = state.agentData?.config?.llm;
+  const st = document.getElementById("st-llm");
   if (cfg?.api_key) {
-    st.innerHTML = `<span class="status-dot ok"></span>LLM Enabled (${cfg.model || "gpt-4o-mini"})`;
+    st.innerHTML = `<span class="status-dot online"></span>LLM · ${cfg.model || "gpt-4o-mini"}`;
   } else {
-    st.innerHTML = '<span class="status-dot off"></span>LLM Disabled';
+    st.innerHTML = '<span class="status-dot idle"></span>LLM Disabled';
   }
 }
 
+/* ============================================================
+   Sidebar Rendering
+   ============================================================ */
 function renderSidebars() {
   const al = document.getElementById("agent-list");
   al.innerHTML = state.agents.length ? state.agents.map(a =>
-    `<div class="sidebar-item ${a === state.selectedAgent ? "active" : ""}" onclick="selectAgent('${a}')">${a}</div>`
-  ).join("") : '<div class="empty">暂无 Agent</div>';
+    `<div class="sidebar-item ${a === state.selectedAgent ? "active" : ""}" onclick="selectAgent('${a}')">${esc(state.agentNames[a] || a)}<small>${esc(a)}</small><span class="sidebar-del" onclick="event.stopPropagation();deleteAgent('${a}')" title="删除 Agent">×</span></div>`
+  ).join("") : '<div class="empty"><div class="empty-icon">⬡</div>暂无 Agent</div>';
 
   const ut = document.getElementById("user-tree");
   const users = Object.keys(state.users);
-  if (!users.length) { ut.innerHTML = '<div class="empty">暂无 User</div>'; return; }
+  if (!users.length) { ut.innerHTML = '<div class="empty"><div class="empty-icon">⬢</div>暂无 User</div>'; return; }
   ut.innerHTML = users.map(uid => {
     const sessions = state.users[uid] || [];
     const uActive = uid === state.selectedUser;
-    let html = `<div class="sidebar-item ${uActive && !state.selectedSession ? "active" : ""}" onclick="selectUser('${uid}')">${uid}<small>${sessions.length} sessions</small></div>`;
+    let html = `<div class="sidebar-item ${uActive && !state.selectedSession ? "active" : ""}" onclick="selectUser('${uid}')">${esc(uid)}<small>${sessions.length} 个会话</small><span class="sidebar-del" onclick="event.stopPropagation();deleteUser('${uid}')" title="删除 User">×</span></div>`;
     if (uActive) {
-      html += sessions.map(s =>
-        `<div class="sidebar-item ${s === state.selectedSession ? "active" : ""}" style="padding-left:28px;font-size:12px" onclick="selectSession('${uid}','${s}')">${s}</div>`
-      ).join("");
+      html += sessions.map((s, i) => {
+        const agent = state.sessionAgents[s] || "";
+        const isLast = i === sessions.length - 1;
+        return `<div class="sidebar-item child ${isLast ? "last" : ""} ${s === state.selectedSession ? "active" : ""}" onclick="selectSession('${uid}','${s}')">${esc(s)}${agent ? `<span class="agent-tag">${esc(agent)}</span>` : ""}<span class="sidebar-del" onclick="event.stopPropagation();deleteSession('${uid}','${s}')" title="删除 Session">×</span></div>`;
+      }).join("");
     }
     return html;
   }).join("");
 }
 
+/* ============================================================
+   Tab Navigation
+   ============================================================ */
 function switchTab(tab) {
   state.tab = tab;
   location.hash = "tab=" + tab;
@@ -273,60 +550,24 @@ document.getElementById("tabs").addEventListener("click", e => {
   if (e.target.dataset.tab) switchTab(e.target.dataset.tab);
 });
 
+/* ============================================================
+   Agent Actions
+   ============================================================ */
 async function selectAgent(id) {
-  state.selectedAgent = id;
-  persist();
-  renderSidebars();
+  state.selectedAgent = id; persist(); renderSidebars();
   try {
     const { data, elapsed } = await api("GET", `/api/v1/agents/${id}`);
     state.agentData = data;
+    state.agentNames[id] = data.name;
     const r2 = await api("GET", `/api/v1/agents/${id}/skills`);
     state.agentSkills = r2.data;
     logAction("GET agent", JSON.stringify(data, null, 2), elapsed);
     updateLlmStatus();
-  } catch (e) {
-    state.agentData = null;
-    state.agentSkills = [];
-  }
+  } catch (e) { state.agentData = null; state.agentSkills = []; }
+  // Ensure session-agent mapping is loaded for current user
+  await loadSessionAgents();
+  renderSidebars();
   if (state.tab === "agent") renderTab();
-}
-
-function selectUser(uid) {
-  state.selectedUser = uid;
-  state.selectedSession = null;
-  persist();
-  renderSidebars();
-  loadUserData();
-}
-
-async function selectSession(uid, sid) {
-  state.selectedUser = uid;
-  state.selectedSession = sid;
-  persist();
-  renderSidebars();
-  await loadUserData();
-  await loadMessages();
-  if (state.tab === "session") renderTab();
-}
-
-async function loadUserData() {
-  if (!state.selectedUser) return;
-  try {
-    const { data } = await api("GET", `/api/v1/users/${state.selectedUser}/profile`);
-    state.userProfile = data;
-  } catch (_) {
-    state.userProfile = { user_id: state.selectedUser, profile: {} };
-  }
-  if (state.tab === "user") renderTab();
-}
-
-async function loadMessages() {
-  if (!state.selectedSession) return;
-  try {
-    const { data } = await api("GET", `/api/v1/sessions/${state.selectedSession}/messages?limit=100`);
-    state.messages = data;
-  } catch (_) { state.messages = []; }
-  if (state.tab === "session") renderTab();
 }
 
 async function addAgent() {
@@ -334,18 +575,54 @@ async function addAgent() {
   if (!id) return;
   try {
     await api("POST", "/api/v1/agents", { agent_id: id, name: id, persona: "", config: {} });
-    if (!state.agents.includes(id)) state.agents.push(id);
+    if (!state.agents.includes(id)) { state.agents.push(id); state.agentNames[id] = id; }
     document.getElementById("new-agent-id").value = "";
     await selectAgent(id);
   } catch (e) {
     if (e.status === 409) {
-      if (!state.agents.includes(id)) state.agents.push(id);
+      if (!state.agents.includes(id)) { state.agents.push(id); state.agentNames[id] = id; }
       document.getElementById("new-agent-id").value = "";
       await selectAgent(id);
-    } else {
-      alert("注册失败: " + JSON.stringify(e.detail));
-    }
+    } else { console.error("addAgent", e); alert("注册失败: " + JSON.stringify(e.detail)); }
   }
+}
+
+/* ============================================================
+   User & Session Actions
+   ============================================================ */
+async function deleteAgent(id) {
+  if (!confirm(`确定删除 Agent "${id}"？其 Session 将保留但变为无主状态，Skill 绑定将解除。`)) return;
+  try {
+    await api("DELETE", `/api/v1/agents/${id}`);
+    state.agents = state.agents.filter(a => a !== id);
+    delete state.agentNames[id];
+    // Sessions survive agent deletion (ON DELETE SET NULL), clear their agent tag
+    Object.keys(state.sessionAgents).forEach(sid => { if (state.sessionAgents[sid] === id) state.sessionAgents[sid] = ""; });
+    if (state.selectedAgent === id) { state.selectedAgent = null; state.agentData = null; state.agentSkills = []; }
+    persist(); renderSidebars(); renderTab();
+  } catch (e) { alert("删除失败: " + JSON.stringify(e.detail)); }
+}
+
+async function deleteSession(uid, sid) {
+  if (!confirm(`确定删除 Session "${sid}"？`)) return;
+  try {
+    await api("DELETE", `/api/v1/sessions/${sid}`);
+    if (state.users[uid]) state.users[uid] = state.users[uid].filter(s => s !== sid);
+    delete state.sessionAgents[sid];
+    if (state.selectedSession === sid) { state.selectedSession = null; state.messages = []; }
+    persist(); renderSidebars(); renderTab();
+  } catch (e) { alert("删除失败: " + JSON.stringify(e.detail)); }
+}
+
+async function deleteUser(uid) {
+  if (!confirm(`确定删除 User "${uid}"？此操作会级联删除其所有记忆片段和会话。`)) return;
+  try {
+    await api("DELETE", `/api/v1/users/${uid}`);
+    (state.users[uid] || []).forEach(sid => delete state.sessionAgents[sid]);
+    delete state.users[uid];
+    if (state.selectedUser === uid) { state.selectedUser = null; state.selectedSession = null; state.userProfile = null; state.memories = []; }
+    persist(); renderSidebars(); renderTab();
+  } catch (e) { alert("删除失败: " + JSON.stringify(e.detail)); }
 }
 
 function addUser() {
@@ -369,20 +646,70 @@ async function createSession() {
     if (sid) body.session_id = sid;
     const { data, elapsed } = await api("POST", "/api/v1/sessions", body);
     if (!state.users[uid].includes(data.session_id)) state.users[uid].push(data.session_id);
-    state.selectedUser = uid;
-    state.selectedSession = data.session_id;
+    state.sessionAgents[data.session_id] = state.selectedAgent;
+    state.selectedUser = uid; state.selectedSession = data.session_id;
     document.getElementById("new-session-id").value = "";
     logAction("POST session", JSON.stringify(data, null, 2), elapsed);
-    persist();
-    renderSidebars();
+    persist(); renderSidebars();
     await loadMessages();
     switchTab("session");
   } catch (e) { alert("创建失败: " + JSON.stringify(e.detail)); }
 }
 
+async function loadSessionAgents() {
+  const uid = state.selectedUser;
+  if (!uid || !state.users[uid]) return;
+  for (const sid of state.users[uid]) {
+    if (state.sessionAgents[sid] === undefined) {
+      try { const { data } = await api("GET", `/api/v1/sessions/${sid}`); state.sessionAgents[sid] = data.agent_id || ""; } catch (_) {}
+    }
+  }
+}
+
+async function selectUser(uid) {
+  state.selectedUser = uid; state.selectedSession = null;
+  await loadSessionAgents();
+  persist(); renderSidebars(); loadUserData();
+  if (state.tab === "agent") renderTab();
+}
+
+async function selectSession(uid, sid) {
+  state.selectedUser = uid; state.selectedSession = sid;
+  await loadSessionAgents();
+  persist(); renderSidebars();
+  await loadUserData(); await loadMessages();
+  if (state.tab === "session") renderTab();
+  if (state.tab === "agent") renderTab();
+}
+
+async function loadUserData() {
+  if (!state.selectedUser) return;
+  try {
+    const { data } = await api("GET", `/api/v1/users/${state.selectedUser}/profile`);
+    state.userProfile = data;
+  } catch (_) { state.userProfile = { user_id: state.selectedUser, profile: {} }; }
+  if (state.tab === "user") renderTab();
+}
+
+async function loadMessages() {
+  if (!state.selectedSession) return;
+  try {
+    const { data } = await api("GET", `/api/v1/sessions/${state.selectedSession}/messages?limit=100`);
+    state.messages = data;
+  } catch (_) { state.messages = []; }
+  if (state.tab === "session") renderTab();
+}
+
+/* ============================================================
+   Utilities
+   ============================================================ */
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+function escJson(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 function trunc(s, n) { return s.length > n ? s.slice(0, n) + "…" : s; }
 
+/* ============================================================
+   Tab: Agent Info
+   ============================================================ */
 function renderTab() {
   const el = document.getElementById("tab-content");
   switch (state.tab) {
@@ -395,26 +722,54 @@ function renderTab() {
 }
 
 function renderAgentTab() {
-  if (!state.selectedAgent) return '<div class="empty">← 选择或注册 Agent</div>';
+  if (!state.selectedAgent) return '<div class="empty"><div class="empty-icon">⬡</div>← 选择或注册 Agent</div>';
   const a = state.agentData;
-  if (!a) return '<div class="empty">加载中...</div>';
-  const skillsHtml = state.agentSkills.length ? `<table><thead><tr><th>Skill</th><th>Triggers</th><th>Enabled</th><th></th></tr></thead><tbody>${
-    state.agentSkills.map(s => `<tr><td>${esc(s.name)}</td><td>${esc((s.trigger_keys||[]).join(", "))}</td><td><label class="toggle"><input type="checkbox" ${s.enabled?"checked":""} onchange="toggleSkill('${s.skill_id}', this.checked)" /><span></span></label></td><td><button class="btn btn-danger btn-sm" onclick="unbindSkill('${s.skill_id}')">解绑</button></td></tr>`).join("")
+  if (!a) return '<div class="empty">加载中…</div>';
+  const skillsHtml = state.agentSkills.length ? `<table><thead><tr><th>Skill</th><th>Triggers</th><th style="width:60px">启用</th><th style="width:60px"></th></tr></thead><tbody>${
+    state.agentSkills.map(s => `<tr><td style="color:var(--text-primary);font-weight:500">${esc(s.name)}</td><td>${esc((s.trigger_keys||[]).join(", "))}</td><td><label class="toggle"><input type="checkbox" ${s.enabled?"checked":""} onchange="toggleSkill('${s.skill_id}', this.checked)" /><span></span></label></td><td><button class="btn btn-danger btn-sm" onclick="unbindSkill('${s.skill_id}')">解绑</button></td></tr>`).join("")
   }</tbody></table>` : '<div class="empty">未绑定 Skill</div>';
+
+  // Only show sessions for the currently selected user
+  const agentSessions = [], orphanSessions = [];
+  if (state.selectedUser && state.users[state.selectedUser]) {
+    state.users[state.selectedUser].forEach(sid => {
+      const ag = state.sessionAgents[sid];
+      if (ag === a.agent_id) agentSessions.push({ sid, uid: state.selectedUser });
+      else if (ag === "") orphanSessions.push({ sid, uid: state.selectedUser });
+    });
+  }
+
+  const otherAgents = state.agents.filter(ag => ag !== a.agent_id);
+  const showSessions = state.selectedUser && state.selectedSession;
+
+  const sessionsPanel = (showSessions && agentSessions.length) ? `<div class="panel"><div class="panel-header">所属 Sessions</div><table><thead><tr><th>Session</th><th style="width:170px">切换至</th></tr></thead><tbody>${agentSessions.map(({sid}) => `<tr><td style="font-family:var(--mono);font-size:12px">${esc(sid)}</td><td><select onchange="reassignSession('${sid}','${state.selectedUser}', this.value)" style="margin:0;padding:4px 8px;font-size:11px;width:auto"><option value="">-- 切换至 --</option>${otherAgents.map(ag => `<option value="${esc(ag)}">${esc(state.agentNames[ag]||ag)}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div>` : "";
+
+  const orphanPanel = (showSessions && orphanSessions.length) ? `<div class="panel"><div class="panel-header">⚠ 无主 Sessions</div><table><thead><tr><th>Session</th><th style="width:100px">操作</th></tr></thead><tbody>${
+    orphanSessions.map(({sid}) => `<tr><td style="font-family:var(--mono);font-size:12px">${esc(sid)}</td><td><button class="btn btn-primary btn-sm" onclick="reassignSession('${sid}','${state.selectedUser}','${esc(a.agent_id)}')">认领</button></td></tr>`).join("")
+  }</tbody></table></div>` : "";
+
+  const otherAgent = showSessions ? (state.sessionAgents[state.selectedSession] || "") : "";
+  const mismatch = showSessions && otherAgent && otherAgent !== a.agent_id;
+  const sessionHint = !state.selectedUser ? '' : (!showSessions ? '<div class="empty">← 选中具体 Session 后查看归属</div>' : (mismatch ? `<div class="empty">当前 Session 属于 <b>${esc(state.agentNames[otherAgent] || otherAgent)}</b>，不属于此 Agent<br><button class="btn btn-primary btn-sm mt-8" onclick="reassignSession('${esc(state.selectedSession)}','${esc(state.selectedUser)}','${esc(a.agent_id)}')">切换至当前 Agent</button></div>` : (agentSessions.length + orphanSessions.length === 0 ? '<div class="empty">该 Session 不属于当前 Agent</div>' : '')));
+
   return `
-    <div class="panel"><h3>Agent: ${esc(a.agent_id)}</h3>
+    <div class="panel">
+      <div class="panel-header">Agent · ${esc(a.agent_id)}</div>
       <div class="row">
-        <div><label>Name</label><input id="ag-name" value="${esc(a.name)}" /></div>
-        <div><label>Status</label><input id="ag-status" value="${esc(a.status)}" /></div>
+        <div><label>名称</label><input id="ag-name" value="${esc(a.name)}" /></div>
+        <div><label>状态</label><select id="ag-status">${["active","inactive","archived"].map(s => `<option value="${s}" ${a.status===s?"selected":""}>${s}</option>`).join("")}</select></div>
       </div>
       <label>Persona</label><textarea id="ag-persona">${esc(a.persona)}</textarea>
-      <label>Config (JSON)</label><textarea id="ag-config" class="json-editor">${esc(JSON.stringify(a.config||{}, null, 2))}</textarea>
-      <div style="margin-top:10px">
+      <label>Config (JSON)</label><textarea id="ag-config" class="json-editor">${escJson(JSON.stringify(a.config||{}, null, 2))}</textarea>
+      <div style="margin-top:12px;display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveAgent()">保存配置</button>
         <button class="btn btn-secondary" onclick="bindSkillPrompt()">绑定 Skill</button>
       </div>
     </div>
-    <div class="panel"><h3>Skills</h3>${skillsHtml}</div>`;
+    ${orphanPanel}
+    ${sessionsPanel}
+    ${sessionHint ? `<div class="panel"><div class="panel-header">Session 关联</div>${sessionHint}</div>` : ""}
+    <div class="panel"><div class="panel-header">已绑定 Skills</div>${skillsHtml}</div>`;
 }
 
 async function saveAgent() {
@@ -427,10 +782,10 @@ async function saveAgent() {
     };
     const { data, elapsed } = await api("PATCH", `/api/v1/agents/${state.selectedAgent}`, body);
     state.agentData = data;
+    state.agentNames[state.selectedAgent] = data.name;
     logAction("PATCH agent", JSON.stringify(body, null, 2), elapsed);
-    updateLlmStatus();
-    renderTab();
-  } catch (e) { alert("保存失败: " + (e.detail?.detail || e.message || JSON.stringify(e))); }
+    updateLlmStatus(); renderSidebars(); renderTab();
+  } catch (e) { console.error("saveAgent", e); alert("保存失败: " + (e.detail?.detail || e.message || JSON.stringify(e))); }
 }
 
 async function bindSkillPrompt() {
@@ -440,9 +795,8 @@ async function bindSkillPrompt() {
     const { elapsed } = await api("POST", `/api/v1/agents/${state.selectedAgent}/skills/${sid}`);
     logAction("POST bind skill", sid, elapsed);
     const r2 = await api("GET", `/api/v1/agents/${state.selectedAgent}/skills`);
-    state.agentSkills = r2.data;
-    renderTab();
-  } catch (e) { alert("绑定失败"); }
+    state.agentSkills = r2.data; renderTab();
+  } catch (e) { console.error("bindSkill", e); alert("绑定失败"); }
 }
 
 async function toggleSkill(skillId, enabled) {
@@ -450,48 +804,65 @@ async function toggleSkill(skillId, enabled) {
     await api("PATCH", `/api/v1/agents/${state.selectedAgent}/skills/${skillId}`, { enabled });
     const r2 = await api("GET", `/api/v1/agents/${state.selectedAgent}/skills`);
     state.agentSkills = r2.data;
-  } catch (_) { alert("更新 Skill 状态失败"); renderTab(); }
+  } catch (e) { console.error("toggleSkill", e); }
+}
+
+async function reassignSession(sid, uid, newAgentId) {
+  if (!newAgentId) return;
+  try {
+    await api("PATCH", `/api/v1/sessions/${sid}`, { agent_id: newAgentId });
+    state.sessionAgents[sid] = newAgentId;
+    // Ensure new agent is in the list
+    if (!state.agents.includes(newAgentId)) {
+      state.agents.push(newAgentId);
+      state.agentNames[newAgentId] = newAgentId;
+    }
+    persist(); renderSidebars(); renderTab();
+  } catch (e) { console.error("reassignSession", e); alert("切换失败: " + JSON.stringify(e.detail)); }
 }
 
 async function unbindSkill(sid) {
   try {
     await api("DELETE", `/api/v1/agents/${state.selectedAgent}/skills/${sid}`);
     const r2 = await api("GET", `/api/v1/agents/${state.selectedAgent}/skills`);
-    state.agentSkills = r2.data;
-    renderTab();
-  } catch (_) { alert("解绑失败"); }
+    state.agentSkills = r2.data; renderTab();
+  } catch (e) { console.error("unbindSkill", e); }
 }
 
+/* ============================================================
+   Tab: User Memory
+   ============================================================ */
 function renderUserTab() {
-  if (!state.selectedUser) return '<div class="empty">← 选择 User</div>';
+  if (!state.selectedUser) return '<div class="empty"><div class="empty-icon">⬢</div>← 选择 User</div>';
   const prof = state.userProfile?.profile || {};
-  const memHtml = state.memories.length ? `<table><thead><tr><th></th><th>Type</th><th>Content</th><th>Imp.</th><th>Score</th><th></th></tr></thead><tbody>${
-    state.memories.map(m => `<tr><td><input type="checkbox" class="mem-check" value="${m.fragment_id}" /></td><td>${esc(m.type)}</td><td>${esc(trunc(m.content,60))}</td><td>${m.importance?.toFixed(2)||"-"}</td><td>${m.score?.toFixed(3)||"-"}</td><td><button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.fragment_id}')">删</button></td></tr>`).join("")
+  const memHtml = state.memories.length ? `<table><thead><tr><th style="width:30px"></th><th>类型</th><th>内容</th><th>重要性</th><th>相似度</th><th style="width:50px"></th></tr></thead><tbody>${
+    state.memories.map(m => `<tr><td><input type="checkbox" class="mem-check" value="${m.fragment_id}" /></td><td><span class="badge ${m.type==='preference'?'success':'neutral'}">${esc(m.type)}</span></td><td style="color:var(--text-primary)">${esc(trunc(m.content,60))}</td><td>${m.importance?.toFixed(2)||"-"}</td><td>${m.score?.toFixed(3)||"-"}</td><td><button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.fragment_id}')">删除</button></td></tr>`).join("")
   }</tbody></table>` : '<div class="empty">无记忆，请搜索或添加</div>';
   return `
-    <div class="panel"><h3>User: ${esc(state.selectedUser)}</h3>
+    <div class="panel">
+      <div class="panel-header">User · ${esc(state.selectedUser)}</div>
       <label>Profile (JSON)</label>
-      <textarea id="user-profile" class="json-editor">${esc(JSON.stringify(prof, null, 2))}</textarea>
+      <textarea id="user-profile" class="json-editor">${escJson(JSON.stringify(prof, null, 2))}</textarea>
       <button class="btn btn-primary" onclick="saveProfile()">保存 Profile</button>
     </div>
-    <div class="panel"><h3>记忆检索</h3>
+    <div class="panel">
+      <div class="panel-header">记忆检索</div>
       <div class="form-row">
         <div class="field field-grow"><label>关键词</label><input id="mem-query" placeholder="全文检索关键词" /></div>
-        <div class="field field-sm"><label>top_k</label><input id="mem-topk" type="number" value="10" min="1" max="100" /></div>
-        <div class="field field-md"><label>type</label><input id="mem-type" placeholder="fact / preference" /></div>
-        <div class="field field-action"><label aria-hidden="true">&nbsp;</label><button class="btn btn-primary" onclick="searchMemories()">搜索</button></div>
+        <div class="field field-sm"><label>Top-K</label><input id="mem-topk" type="number" value="10" min="1" max="100" /></div>
+        <div class="field field-md"><label>类型</label><input id="mem-type" placeholder="fact / preference" /></div>
+        <div class="field field-action"><label style="visibility:hidden">&nbsp;</label><button class="btn btn-primary" onclick="searchMemories()">搜索</button></div>
       </div>
       ${memHtml}
-      <div style="margin-top:12px">
-        <button class="btn btn-danger btn-sm" onclick="deleteSelectedMemories()">删除选中</button>
-      </div>
+      <div class="mt-12"><button class="btn btn-danger btn-sm" onclick="deleteSelectedMemories()">删除选中</button></div>
     </div>
-    <div class="panel"><h3>手动添加记忆</h3>
+    <div class="panel">
+      <div class="panel-header">手动添加记忆</div>
       <div class="form-row">
-        <div class="field field-md"><label>type</label><input id="add-type" value="fact" /></div>
-        <div class="field field-grow"><label>content</label><input id="add-content" placeholder="记忆内容" /></div>
-        <div class="field field-sm"><label>importance</label><input id="add-imp" type="number" value="0.5" step="0.1" min="0" max="1" /></div>
-        <div class="field field-action"><label aria-hidden="true">&nbsp;</label><button class="btn btn-primary" onclick="addMemory()">添加</button></div>
+        <div class="field field-md"><label>类型</label><input id="add-type" value="fact" /></div>
+        <div class="field field-grow"><label>内容</label><input id="add-content" placeholder="记忆内容" /></div>
+        <div class="field field-sm"><label>重要性</label><input id="add-imp" type="number" value="0.5" step="0.1" min="0" max="1" /></div>
+        <div class="field field-action"><label style="visibility:hidden">&nbsp;</label><button class="btn btn-primary" onclick="addMemory()">添加</button></div>
       </div>
     </div>`;
 }
@@ -504,7 +875,7 @@ async function saveProfile() {
     state.userProfile = data;
     logAction("PATCH profile", JSON.stringify(profile, null, 2), elapsed);
     alert("Profile 已保存");
-  } catch (e) { alert("保存失败，用户可能不存在。请先添加记忆以创建用户。"); }
+  } catch (e) { console.error("saveProfile", e); alert("保存失败: " + (e.detail?.detail || e.message || JSON.stringify(e))); }
 }
 
 async function searchMemories() {
@@ -535,14 +906,12 @@ async function addMemory() {
     const { elapsed } = await api("POST", `/api/v1/users/${state.selectedUser}/memories`, body);
     logAction("POST memory", body.content, elapsed);
     await searchMemories();
-  } catch (e) { alert("添加失败: " + JSON.stringify(e.detail)); }
+  } catch (e) { console.error("addMemory", e); alert("添加失败: " + JSON.stringify(e.detail)); }
 }
 
 async function deleteMemory(fid) {
-  try {
-    await api("DELETE", `/api/v1/users/${state.selectedUser}/memories/${fid}`);
-    await searchMemories();
-  } catch (_) { alert("删除失败"); }
+  await api("DELETE", `/api/v1/users/${state.selectedUser}/memories/${fid}`);
+  await searchMemories();
 }
 
 async function deleteSelectedMemories() {
@@ -552,25 +921,32 @@ async function deleteSelectedMemories() {
   await searchMemories();
 }
 
+/* ============================================================
+   Tab: Session
+   ============================================================ */
 function renderSessionTab() {
-  if (!state.selectedSession) return '<div class="empty">← 选择 Session 或创建新会话</div>';
+  if (!state.selectedSession) return '<div class="empty"><div class="empty-icon">◈</div>← 选择 Session 或创建新会话</div>';
+  const curAgent = state.sessionAgents[state.selectedSession] || "";
+  const agentSelect = `<select onchange="reassignSession('${esc(state.selectedSession)}','${esc(state.selectedUser||"")}', this.value)" style="margin:0;padding:4px 8px;font-size:12px;width:auto"><option value="">${curAgent ? esc(state.agentNames[curAgent] || curAgent) : "无 Agent"}</option>${state.agents.filter(a => a !== curAgent).map(a => `<option value="${esc(a)}">${esc(state.agentNames[a]||a)}</option>`).join("")}</select>`;
   const msgs = state.messages.map(m => {
     const cls = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
     return `<div class="msg-bubble ${cls}"><div class="msg-role">${esc(m.role)} · ${new Date(m.created_at).toLocaleTimeString()}</div>${esc(m.content)}</div>`;
   }).join("");
   return `
-    <div class="panel"><h3>Session: ${esc(state.selectedSession)}</h3>
+    <div class="panel">
+      <div class="panel-header flex-between"><span>Session · ${esc(state.selectedSession)}</span><span>Agent: ${agentSelect}</span></div>
       <div class="msg-list">${msgs || '<div class="empty">暂无消息</div>'}</div>
     </div>
-    <div class="panel"><h3>追加测试消息</h3>
+    <div class="panel">
+      <div class="panel-header">追加测试消息</div>
       <div class="form-row">
-        <div class="field field-md"><label>role</label><select id="msg-role"><option>user</option><option>assistant</option><option>system</option></select></div>
+        <div class="field field-md"><label>角色</label><select id="msg-role"><option>user</option><option>assistant</option><option>system</option></select></div>
         <div class="compose-group">
-          <input id="msg-content" placeholder="消息内容" aria-label="消息内容" />
+          <input id="msg-content" placeholder="消息内容" />
           <button class="btn btn-primary" onclick="addMessage()">发送</button>
         </div>
       </div>
-      <div style="margin-top:10px">
+      <div class="mt-12" style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="loadMessages()">刷新消息</button>
         <button class="btn btn-secondary" onclick="endSession()">结束会话</button>
       </div>
@@ -588,13 +964,14 @@ async function addMessage() {
 }
 
 async function endSession() {
-  try {
-    await api("PATCH", `/api/v1/sessions/${state.selectedSession}`, { status: "completed" });
-    logAction("PATCH session", "status=completed", 0);
-    alert("会话已结束");
-  } catch (_) { alert("操作失败"); }
+  await api("PATCH", `/api/v1/sessions/${state.selectedSession}`, { status: "completed" });
+  logAction("PATCH session", "status=completed", 0);
+  alert("会话已结束");
 }
 
+/* ============================================================
+   Tab: Context Preview
+   ============================================================ */
 function toMessages(ctx) {
   const messages = [];
   const am = ctx.agent_memory, um = ctx.user_memory, sm = ctx.session_memory;
@@ -617,27 +994,28 @@ function estTokens(msgs) {
 
 function renderContextTab() {
   const sel = `
-    <div class="panel"><h3>选择上下文来源</h3>
+    <div class="panel">
+      <div class="panel-header">上下文来源</div>
       <div class="row">
         <div><label>Agent</label><input value="${esc(state.selectedAgent||"")}" disabled /></div>
         <div><label>User</label><input value="${esc(state.selectedUser||"")}" disabled /></div>
         <div><label>Session</label><input value="${esc(state.selectedSession||"")}" disabled /></div>
       </div>
-      <label>Query (可选，用于语义检索)</label>
+      <label>Query（可选，用于语义检索）</label>
       <input id="ctx-query" placeholder="检索 query" />
-      <button class="btn btn-primary" style="margin-top:8px" onclick="refreshContext()">刷新上下文</button>
+      <button class="btn btn-primary mt-8" onclick="refreshContext()">刷新上下文</button>
     </div>`;
-  if (!state.contextData) return sel + '<div class="empty">点击「刷新上下文」预览 to_messages() 输出</div>';
+  if (!state.contextData) return sel + '<div class="empty"><div class="empty-icon">◫</div>点击「刷新上下文」预览 to_messages() 输出</div>';
   const msgs = toMessages(state.contextData);
   const msgHtml = msgs.map((m, i) => {
     const cls = m._src === "system" ? "system" : m._src === "memory" ? "memory" : "session";
     return `<div class="ctx-msg ${cls}"><div class="ctx-meta">[${i}] ${m.role} · ${m._src}</div><div class="ctx-content">${esc(m.content)}</div></div>`;
   }).join("");
   return sel + `
-    <div class="panel"><h3>to_messages() 预览</h3>
-      <div class="token-est">估算 Token: ~${estTokens(msgs)}</div>
+    <div class="panel">
+      <div class="panel-header flex-between"><span>to_messages() 预览</span><span class="token-est">≈ ${estTokens(msgs)} tokens</span></div>
       ${msgHtml}
-      <div style="margin-top:12px">
+      <div class="mt-12" style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="copyContext('messages')">复制 messages 数组</button>
         <button class="btn btn-secondary" onclick="copyContext('json')">复制完整 JSON</button>
       </div>
@@ -663,31 +1041,60 @@ function copyContext(mode) {
   navigator.clipboard.writeText(text).then(() => alert("已复制"));
 }
 
+/* ============================================================
+   Tab: LLM Logs
+   ============================================================ */
 function renderLlmTab() {
   const cfg = state.agentData?.config;
   const llmOn = cfg?.llm?.api_key;
   const embOn = cfg?.embedding?.api_key || llmOn;
   const statusHtml = `
-    <div class="panel"><h3>LLM 配置状态</h3>
-      <p>Chat LLM: <span class="badge ${llmOn?"ok":"err"}">${llmOn ? (cfg.llm.model||"gpt-4o-mini") : "Disabled"}</span></p>
-      <p>Embedding: <span class="badge ${embOn?"ok":"err"}">${embOn ? (cfg.embedding?.model||"text-embedding-3-small") : "Disabled"}</span></p>
-      <p style="color:var(--text2);font-size:12px;margin-top:8px">LLM 在消息追加后异步执行：embedding → 摘要(>40条) → 记忆提取。下方为 Debug 控制台操作日志。</p>
+    <div class="panel">
+      <div class="panel-header">LLM 配置状态</div>
+      <div class="row">
+        <div><label>Chat</label><span class="badge ${llmOn?"success":"danger"}">${llmOn ? (cfg.llm.model||"gpt-4o-mini") : "Disabled"}</span></div>
+        <div><label>Embedding</label><span class="badge ${embOn?"success":"danger"}">${embOn ? (cfg.embedding?.model||cfg.llm?.model||"text-embedding-3-small") : "Disabled"}</span></div>
+      </div>
+      <p style="color:var(--text-tertiary);font-size:12px;margin-top:10px">消息追加后异步执行：embedding → 摘要 (≥41条) → 记忆提取。下方为控制台操作日志。</p>
     </div>`;
   const logHtml = state.llmLogs.length ? `<table><thead><tr><th>时间</th><th>操作</th><th>耗时</th><th>状态</th></tr></thead><tbody>${
-    state.llmLogs.map((l, i) => `<tr class="log-row" onclick="toggleLog(${i})"><td>${new Date(l.time).toLocaleTimeString()}</td><td>${esc(l.op)}</td><td>${l.elapsed}ms</td><td><span class="badge ${l.ok?"ok":"err"}">${l.ok?"OK":"ERR"}</span></td></tr><tr><td colspan="4"><div class="log-detail" id="log-${i}">${esc(l.detail||"")}</div></td></tr>`).join("")
+    state.llmLogs.map((l, i) => `<tr class="log-row" onclick="toggleLog(${i})"><td>${new Date(l.time).toLocaleTimeString()}</td><td style="color:var(--text-primary)">${esc(l.op)}</td><td>${l.elapsed}ms</td><td><span class="badge ${l.ok?"success":"danger"}">${l.ok?"OK":"ERR"}</span></td></tr><tr><td colspan="4"><div class="log-detail" id="log-${i}">${esc(l.detail||"")}</div></td></tr>`).join("")
   }</tbody></table>` : '<div class="empty">暂无操作日志</div>';
-  return statusHtml + `<div class="panel"><h3>操作日志</h3>${logHtml}</div>`;
+  return statusHtml + `<div class="panel"><div class="panel-header">操作日志</div>${logHtml}</div>`;
 }
 
 function toggleLog(i) {
-  const el = document.getElementById("log-" + i);
-  if (el) el.classList.toggle("open");
+  document.getElementById("log-" + i)?.classList.toggle("open");
 }
 
-loadState();
-renderSidebars();
-switchTab(state.tab);
-checkHealth();
+/* ============================================================
+   Init
+   ============================================================ */
+async function initApp() {
+  loadState();
+  // Populate agent names for all known agents
+  for (const aid of state.agents) {
+    if (!state.agentNames[aid]) state.agentNames[aid] = aid;
+  }
+  renderSidebars();
+  // Restore selected agent data if needed
+  if (state.selectedAgent && !state.agentData) {
+    try {
+      const { data } = await api("GET", `/api/v1/agents/${state.selectedAgent}`);
+      state.agentData = data;
+      const r2 = await api("GET", `/api/v1/agents/${state.selectedAgent}/skills`);
+      state.agentSkills = r2.data;
+      updateLlmStatus();
+    } catch (_) { state.selectedAgent = null; state.agentData = null; }
+  }
+  // Restore session-agent mappings for selected user
+  await loadSessionAgents();
+  renderSidebars();
+  switchTab(state.tab);
+  checkHealth();
+}
+
+initApp();
 setInterval(checkHealth, 30000);
 </script>
 </body>
