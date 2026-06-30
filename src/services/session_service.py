@@ -14,9 +14,16 @@ class SessionService:
     async def create_session(
         self, agent_id: str, user_id: str, session_id: str = None
     ) -> Session:
+        resolved_id = session_id or f"sess_{uuid.uuid4().hex[:12]}"
+        existing = await self.db.execute(
+            select(Session).where(Session.session_id == resolved_id)
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError("session_id_exists")
+
         await UserService(self.db).get_or_create_user(user_id)
         session = Session(
-            session_id=session_id or f"sess_{uuid.uuid4().hex[:12]}",
+            session_id=resolved_id,
             agent_id=agent_id,
             user_id=user_id,
         )

@@ -72,11 +72,17 @@ def _service(db: AsyncSession) -> SessionService:
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(body: SessionCreate, db: AsyncSession = Depends(get_db)):
     svc = _service(db)
-    session = await svc.create_session(
-        agent_id=body.agent_id,
-        user_id=body.user_id,
-        session_id=body.session_id,
-    )
+    try:
+        session = await svc.create_session(
+            agent_id=body.agent_id,
+            user_id=body.user_id,
+            session_id=body.session_id,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session '{body.session_id}' already exists",
+        )
     return session
 
 
