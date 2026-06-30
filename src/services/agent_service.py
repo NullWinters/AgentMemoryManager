@@ -87,6 +87,23 @@ class AgentService:
             return True
         return False
 
+    async def update_skill_binding(
+        self, agent_id: str, skill_id: uuid.UUID, enabled: bool
+    ) -> SkillAgent | None:
+        result = await self.db.execute(
+            select(SkillAgent).where(
+                SkillAgent.agent_id == agent_id,
+                SkillAgent.skill_id == skill_id,
+            )
+        )
+        sa = result.scalar_one_or_none()
+        if not sa:
+            return None
+        sa.enabled = enabled
+        await self.db.commit()
+        await self.db.refresh(sa)
+        return sa
+
     async def get_agent_skills(self, agent_id: str) -> list[Skill]:
         result = await self.db.execute(
             select(Skill)

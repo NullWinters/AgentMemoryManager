@@ -481,7 +481,7 @@ python -c "from agentmemory import MemoryClient; print('SDK OK')"
 2. **路由:** `window.location.hash` 控制 Tab 切换，刷新不丢状态
 3. **状态管理:** 全局 `state = {apiBase, apiKey, selectedAgent, selectedUser, selectedSession}`
 4. **暗色主题:** CSS Variables + `@media (prefers-color-scheme: dark)`
-5. **API 地址配置:** 状态栏可切换 `http://localhost:8000` 等
+5. **API 地址配置:** 状态栏可切换 `http://localhost:8080` 等（宿主机端口，容器内仍为 8000）
 
 ### Tab 1: Agent Info
 

@@ -53,6 +53,10 @@ class AgentSkillResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SkillBindingUpdate(BaseModel):
+    enabled: bool
+
+
 class SkillBindingResponse(BaseModel):
     skill_id: uuid.UUID
     agent_id: str
@@ -134,6 +138,22 @@ async def add_skill_to_agent(
         if "already bound" in msg:
             raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=404, detail=msg)
+
+
+@router.patch(
+    "/agents/{agent_id}/skills/{skill_id}", response_model=SkillBindingResponse
+)
+async def update_skill_binding(
+    agent_id: str,
+    skill_id: uuid.UUID,
+    body: SkillBindingUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    svc = _service(db)
+    binding = await svc.update_skill_binding(agent_id, skill_id, body.enabled)
+    if not binding:
+        raise _not_found("Skill binding")
+    return binding
 
 
 @router.delete("/agents/{agent_id}/skills/{skill_id}", status_code=204)

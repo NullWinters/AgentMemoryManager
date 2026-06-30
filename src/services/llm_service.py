@@ -10,13 +10,8 @@ from src.llm import (
     SessionSummarizer,
     TextEmbedder,
 )
-from src.models.database import (
-    Agent,
-    Message,
-    MemoryFragment,
-    Session,
-    User,
-)
+from src.models.database import Agent, Message, MemoryFragment, Session
+from src.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +96,8 @@ class LLMService:
                     )
 
                 extracted = await extractor.extract(msgs_data)
+                user_svc = UserService(db)
+                await user_svc.get_or_create_user(user_id)
                 for frag in extracted.get("fragments", []):
                     frag_emb = None
                     if embedder:
@@ -118,13 +115,9 @@ class LLMService:
 
                 profile_updates = extracted.get("profile_updates", {})
                 if profile_updates:
-                    user_result = await db.execute(
-                        select(User).where(User.user_id == user_id)
-                    )
-                    user_row = user_result.scalar_one_or_none()
-                    if user_row:
-                        existing = user_row.profile or {}
-                        existing.update(profile_updates)
-                        user_row.profile = existing
+                    user_row = await user_svc.get_or_create_user(user_id)
+                    existing = user_row.profile or {}
+                    existing.update(profile_updates)
+                    user_row.profile = existing
 
             await db.commit()
