@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from src.config import MEMORY_API_KEY
-from src.routers import admin, agents, context, sessions, skills
+from src.routers import admin, agents, context, sessions, skills, users
 
 API_KEY_PREFIX = "/api/v1"
 
@@ -47,6 +47,7 @@ app.include_router(agents.router, prefix=API_KEY_PREFIX)
 app.include_router(skills.router, prefix=API_KEY_PREFIX)
 app.include_router(sessions.router, prefix=API_KEY_PREFIX)
 app.include_router(context.router, prefix=API_KEY_PREFIX)
+app.include_router(users.router, prefix=API_KEY_PREFIX)
 app.include_router(admin.router, prefix=API_KEY_PREFIX)
 
 # Debug console — served at /debug
