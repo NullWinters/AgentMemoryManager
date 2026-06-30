@@ -122,9 +122,9 @@ CREATE INDEX idx_messages_session_time ON messages(session_id, created_at);
 
 -- 用户记忆查询
 CREATE INDEX idx_fragments_user ON memory_fragments(user_id, type);
--- 向量索引：IVFFlat
-CREATE INDEX idx_fragments_embedding ON memory_fragments
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+-- 向量索引 IVFFlat：embedding 无固定维度时无法在 init 阶段创建，待有数据后手动执行：
+-- CREATE INDEX idx_fragments_embedding ON memory_fragments
+--     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 -- 全文检索索引
 CREATE INDEX idx_fragments_fts ON memory_fragments
     USING gin (to_tsvector('simple', content));
