@@ -24,12 +24,13 @@ class SessionCreate(BaseModel):
 
 
 class SessionUpdate(BaseModel):
-    status: str
+    status: str | None = None
+    agent_id: str | None = None
 
 
 class SessionResponse(BaseModel):
     session_id: str
-    agent_id: str
+    agent_id: str | None = None
     user_id: str
     status: str
     message_count: int
@@ -91,10 +92,18 @@ async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
 @router.patch("/sessions/{session_id}", response_model=SessionResponse)
 async def update_session(session_id: str, body: SessionUpdate, db: AsyncSession = Depends(get_db)):
     svc = _service(db)
-    session = await svc.update_session_status(session_id, body.status)
+    session = await svc.update_session(session_id, body.status, body.agent_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    svc = _service(db)
+    deleted = await svc.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
 
 
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
