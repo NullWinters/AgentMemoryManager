@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from sqlalchemy import text
 
 from src.database import async_session
@@ -12,10 +12,10 @@ async def health():
     try:
         async with async_session() as db:
             result = await db.execute(
-                text("SELECT installed_version FROM pg_available_extensions WHERE name = 'vector'")
+                text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
             )
             row = result.fetchone()
-            pgvector_ok = row is not None and row[0] is not None
+            pgvector_ok = row is not None
     except Exception:
         pgvector_ok = False
 
