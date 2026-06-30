@@ -112,6 +112,14 @@ class AgentService:
         )
         return list(result.scalars().all())
 
+    async def delete_agent(self, agent_id: str) -> bool:
+        agent = await self.get_agent(agent_id)
+        if not agent:
+            return False
+        await self.db.delete(agent)
+        await self.db.commit()
+        return True
+
     async def get_agent_skill_bindings(self, agent_id: str) -> list[SkillAgent]:
         result = await self.db.execute(
             select(SkillAgent).where(SkillAgent.agent_id == agent_id)
