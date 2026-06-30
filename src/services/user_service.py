@@ -35,6 +35,14 @@ class UserService:
         await self.db.refresh(user)
         return user
 
+    async def delete_user(self, user_id: str) -> bool:
+        user = await self.get_user(user_id)
+        if not user:
+            return False
+        await self.db.delete(user)
+        await self.db.commit()
+        return True
+
     async def add_memory_fragment(
         self,
         user_id: str,
