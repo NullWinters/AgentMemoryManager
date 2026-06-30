@@ -126,6 +126,14 @@ async def update_agent(agent_id: str, body: AgentUpdate, db: AsyncSession = Depe
     return agent
 
 
+@router.delete("/agents/{agent_id}", status_code=204)
+async def delete_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
+    svc = _service(db)
+    deleted = await svc.delete_agent(agent_id)
+    if not deleted:
+        raise _not_found("Agent")
+
+
 @router.post("/agents/{agent_id}/skills/{skill_id}", response_model=SkillBindingResponse, status_code=201)
 async def add_skill_to_agent(
     agent_id: str, skill_id: uuid.UUID, db: AsyncSession = Depends(get_db)
