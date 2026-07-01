@@ -265,7 +265,7 @@ tbody tr.selected td { background: var(--accent-soft); }
 }
 .msg-bubble.assistant {
   align-self: flex-end; background: linear-gradient(135deg, #1e3055, #1a2640);
-  border-bottom-right-radius: 5px; border: 1px solid #243a5e;
+  border-bottom-right-radius: 5px; border: 1px solid #243a5e; color: #fff;
 }
 .msg-bubble.system {
   align-self: center; background: transparent; border: 1px dashed var(--border-default);
@@ -1072,10 +1072,33 @@ function toggleLog(i) {
    ============================================================ */
 async function initApp() {
   loadState();
-  // Populate agent names for all known agents
-  for (const aid of state.agents) {
-    if (!state.agentNames[aid]) state.agentNames[aid] = aid;
+  // Always ensure demo agents/users/sessions exist in state
+  const knownAgents = ['demo_bot', 'book_bot'];
+  for (const aid of knownAgents) {
+    if (!state.agents.includes(aid)) state.agents.push(aid);
+    if (!state.agentNames[aid]) {
+      try {
+        const resp = await fetch(state.apiBase + '/api/v1/agents/' + aid);
+        if (resp.ok) { const d = await resp.json(); state.agentNames[aid] = d.name; }
+      } catch (_) {}
+    }
   }
+  if (!state.users['demo_user']) state.users['demo_user'] = [];
+  if (!state.users['demo_user'].includes('demo_sess')) state.users['demo_user'].push('demo_sess');
+  if (!state.sessionAgents['demo_sess']) {
+    try {
+      const resp = await fetch(state.apiBase + '/api/v1/sessions/demo_sess');
+      if (resp.ok) { const d = await resp.json(); state.sessionAgents['demo_sess'] = d.agent_id || ''; }
+    } catch (_) {}
+  }
+  // Auto-select first agent so LLM status shows
+  state.selectedAgent = 'demo_bot';
+  try {
+    const resp = await fetch(state.apiBase + '/api/v1/agents/demo_bot');
+    if (resp.ok) { state.agentData = await resp.json(); }
+  } catch (_) {}
+  updateLlmStatus();
+  persist();
   renderSidebars();
   // Restore selected agent data if needed
   if (state.selectedAgent && !state.agentData) {
