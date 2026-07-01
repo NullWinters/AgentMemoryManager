@@ -54,6 +54,11 @@ app.include_router(admin.router, prefix=API_KEY_PREFIX)
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(os.path.join(static_dir, "favicon.svg"))
+
+
 @app.get("/debug", include_in_schema=False)
 async def debug_console():
     return FileResponse(os.path.join(static_dir, "debug.html"))
