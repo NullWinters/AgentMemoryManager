@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include docker *.sql
+recursive-include docs *.md
+recursive-include src/static *.html *.svg

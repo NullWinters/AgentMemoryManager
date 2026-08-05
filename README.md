@@ -33,8 +33,8 @@ docker compose up -d
 curl http://localhost:8080/api/v1/health
 # → {"status":"ok","pgvector":true}
 
-# 3. 安装 SDK
-pip install -e sdk/
+# 2. 安装 SDK
+pip install agentmemory-client-nullwinters
 ```
 
 ```python

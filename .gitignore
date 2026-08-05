@@ -10,7 +10,10 @@ TestAPI.md
 __pycache__/
 *.pyc
 .env
+.pypirc
 *.egg-info/
 dist/
 build/
 .playwright-cli/
+sdk/.venv/
+sdk/uv.lock

@@ -1,0 +1,41 @@
+[project]
+name = "agentmemory-client-nullwinters"
+version = "0.1.0"
+description = "AgentMemory 微服务的 Python 客户端 SDK"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "NullWinters" }
+]
+keywords = [
+    "agentmemory",
+    "ai-agent",
+    "memory",
+    "client",
+    "sdk",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.urls]
+Homepage = "https://github.com/NullWinters/AgentMemoryManager"
+Repository = "https://github.com/NullWinters/AgentMemoryManager.git"
+Issues = "https://github.com/NullWinters/AgentMemoryManager/issues"
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
